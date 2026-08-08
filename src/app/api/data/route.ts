@@ -3,7 +3,7 @@ import { AppData } from "@/lib/types";
 import {
   getOrInitAppData,
   isDbConfigured,
-  saveAppData,
+  persistAppData,
 } from "@/lib/db";
 
 export async function GET() {
@@ -20,7 +20,7 @@ export async function GET() {
   } catch (error) {
     console.error("GET /api/data failed:", error);
     return NextResponse.json(
-      { error: "Failed to load data from database" },
+      { error: "Failed to load data from database", detail: String(error) },
       { status: 500 }
     );
   }
@@ -36,12 +36,12 @@ export async function PUT(request: Request) {
 
   try {
     const data = (await request.json()) as AppData;
-    await saveAppData(data);
+    await persistAppData(data);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("PUT /api/data failed:", error);
     return NextResponse.json(
-      { error: "Failed to save data to database" },
+      { error: "Failed to save data to database", detail: String(error) },
       { status: 500 }
     );
   }

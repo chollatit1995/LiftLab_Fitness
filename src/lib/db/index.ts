@@ -1,28 +1,24 @@
 import { AppData } from "../types";
 import { initialData } from "../store";
 import { SCHEMA_STATEMENTS } from "./schema";
-import { getSql } from "./client";
+import { withDb } from "./client";
 
 export { isDbConfigured, getDatabaseUrl } from "./client";
 
-export async function ensureSchema(): Promise<void> {
-  const sql = getSql();
+export async function ensureSchema(sql: ReturnType<typeof import("postgres")>): Promise<void> {
   for (const statement of SCHEMA_STATEMENTS) {
     await sql.unsafe(statement);
   }
 }
 
-export async function isDatabaseEmpty(): Promise<boolean> {
-  const sql = getSql();
+export async function isDatabaseEmpty(sql: ReturnType<typeof import("postgres")>): Promise<boolean> {
   const result = await sql<{ count: number }[]>`
     SELECT COUNT(*)::int AS count FROM staff
   `;
   return result[0]?.count === 0;
 }
 
-export async function loadAppData(): Promise<AppData> {
-  const sql = getSql();
-
+export async function loadAppData(sql: ReturnType<typeof import("postgres")>): Promise<AppData> {
   const [staff, classes, packages, members, facilities, bookings, sales] =
     await Promise.all([
       sql`SELECT id, name, email, phone, role, status, joined_at FROM staff ORDER BY joined_at`,
@@ -105,9 +101,7 @@ export async function loadAppData(): Promise<AppData> {
   };
 }
 
-export async function saveAppData(data: AppData): Promise<void> {
-  const sql = getSql();
-
+export async function saveAppData(data: AppData, sql: ReturnType<typeof import("postgres")>): Promise<void> {
   await sql.begin(async (tx) => {
     await tx`DELETE FROM sales`;
     await tx`DELETE FROM bookings`;
@@ -168,16 +162,20 @@ export async function saveAppData(data: AppData): Promise<void> {
   });
 }
 
-export async function seedDatabase(): Promise<AppData> {
-  await saveAppData(initialData);
-  return initialData;
+export async function getOrInitAppData(): Promise<AppData> {
+  return withDb(async (sql) => {
+    await ensureSchema(sql);
+    const empty = await isDatabaseEmpty(sql);
+    if (empty) {
+      await saveAppData(initialData, sql);
+      return initialData;
+    }
+    return loadAppData(sql);
+  });
 }
 
-export async function getOrInitAppData(): Promise<AppData> {
-  await ensureSchema();
-  const empty = await isDatabaseEmpty();
-  if (empty) {
-    return seedDatabase();
-  }
-  return loadAppData();
+export async function persistAppData(data: AppData): Promise<void> {
+  return withDb(async (sql) => {
+    await saveAppData(data, sql);
+  });
 }

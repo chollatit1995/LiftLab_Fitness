@@ -22,13 +22,22 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
+const FETCH_TIMEOUT_MS = 8000;
+
 async function fetchFromApi(): Promise<AppData | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    const res = await fetch("/api/data");
+    const res = await fetch("/api/data", { signal: controller.signal });
     if (!res.ok) return null;
-    return (await res.json()) as AppData;
+    const json = await res.json();
+    if (json?.error) return null;
+    return json as AppData;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -52,28 +61,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    fetchFromApi().then((apiData) => {
-      if (apiData) {
-        setData(apiData);
-        setUsingDatabase(true);
-      } else {
-        setData(loadData());
-      }
-      setHydrated(true);
-    });
+    fetchFromApi()
+      .then((apiData) => {
+        if (apiData) {
+          setData(apiData);
+          setUsingDatabase(true);
+        } else {
+          setData(loadData());
+        }
+      })
+      .finally(() => setHydrated(true));
   }, []);
 
-  const persist = useCallback(
-    (next: AppData) => {
-      saveData(next);
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(async () => {
-        const saved = await saveToApi(next);
-        setUsingDatabase(saved);
-      }, 400);
-    },
-    []
-  );
+  const persist = useCallback((next: AppData) => {
+    saveData(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      const saved = await saveToApi(next);
+      setUsingDatabase(saved);
+    }, 400);
+  }, []);
 
   const updateData = useCallback(
     (updater: (prev: AppData) => AppData) => {

@@ -3,8 +3,10 @@ import {
   ensureSchema,
   isDatabaseEmpty,
   isDbConfigured,
-  seedDatabase,
+  saveAppData,
 } from "@/lib/db";
+import { withDb } from "@/lib/db/client";
+import { initialData } from "@/lib/store";
 
 async function runMigration() {
   if (!isDbConfigured()) {
@@ -15,21 +17,22 @@ async function runMigration() {
   }
 
   try {
-    await ensureSchema();
-    const empty = await isDatabaseEmpty();
-    if (empty) {
-      await seedDatabase();
-      return NextResponse.json({
-        ok: true,
-        message: "Schema created and seed data inserted",
-        seeded: true,
-      });
-    }
+    const result = await withDb(async (sql) => {
+      await ensureSchema(sql);
+      const empty = await isDatabaseEmpty(sql);
+      if (empty) {
+        await saveAppData(initialData, sql);
+        return { seeded: true };
+      }
+      return { seeded: false };
+    });
 
     return NextResponse.json({
       ok: true,
-      message: "Schema verified (data already exists)",
-      seeded: false,
+      message: result.seeded
+        ? "Schema created and seed data inserted"
+        : "Schema verified (data already exists)",
+      seeded: result.seeded,
     });
   } catch (error) {
     console.error("Migration failed:", error);

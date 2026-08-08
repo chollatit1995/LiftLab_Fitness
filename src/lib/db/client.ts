@@ -1,7 +1,5 @@
 import postgres from "postgres";
 
-let client: ReturnType<typeof postgres> | null = null;
-
 export function getDatabaseUrl(): string | undefined {
   return (
     process.env.POSTGRES_URL ??
@@ -14,7 +12,7 @@ export function isDbConfigured(): boolean {
   return Boolean(getDatabaseUrl());
 }
 
-export function getSql() {
+export function createSql() {
   const url = getDatabaseUrl();
   if (!url) {
     throw new Error(
@@ -22,14 +20,20 @@ export function getSql() {
     );
   }
 
-  if (!client) {
-    client = postgres(url, {
-      ssl: "require",
-      max: 1,
-      idle_timeout: 20,
-      connect_timeout: 10,
-    });
-  }
+  return postgres(url, {
+    ssl: "require",
+    max: 1,
+    idle_timeout: 5,
+    connect_timeout: 10,
+    prepare: false,
+  });
+}
 
-  return client;
+export async function withDb<T>(fn: (sql: ReturnType<typeof postgres>) => Promise<T>): Promise<T> {
+  const sql = createSql();
+  try {
+    return await fn(sql);
+  } finally {
+    await sql.end({ timeout: 2 });
+  }
 }
