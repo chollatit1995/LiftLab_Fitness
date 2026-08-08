@@ -6,7 +6,7 @@ import {
   seedDatabase,
 } from "@/lib/db";
 
-export async function POST() {
+async function runMigration() {
   if (!isDbConfigured()) {
     return NextResponse.json(
       { error: "Database not configured. Connect Supabase and set POSTGRES_URL." },
@@ -32,10 +32,18 @@ export async function POST() {
       seeded: false,
     });
   } catch (error) {
-    console.error("POST /api/db/migrate failed:", error);
+    console.error("Migration failed:", error);
     return NextResponse.json(
-      { error: "Migration failed" },
+      { error: "Migration failed", detail: String(error) },
       { status: 500 }
     );
   }
+}
+
+export async function GET() {
+  return runMigration();
+}
+
+export async function POST() {
+  return runMigration();
 }
