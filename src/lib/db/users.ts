@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { SessionPayload } from "../auth";
 import { AppUser, AppUserRole } from "../user-types";
 import { withDb } from "./client";
@@ -14,17 +13,13 @@ function mapUser(row: Record<string, unknown>): AppUser {
   };
 }
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
-}
-
 export async function validateCredentials(
   email: string,
   password: string
 ): Promise<SessionPayload | null> {
   return withDb(async (sql) => {
     const rows = await sql`
-      SELECT id, email, name, role, password_hash
+      SELECT id, email, name, role, password
       FROM app_users
       WHERE email = ${email} AND status = 'active'
       LIMIT 1
@@ -33,8 +28,7 @@ export async function validateCredentials(
     if (rows.length === 0) return null;
 
     const user = rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash as string);
-    if (!valid) return null;
+    if (password !== (user.password as string)) return null;
 
     return {
       id: user.id as string,
@@ -64,15 +58,13 @@ export async function createUser(input: {
   role: AppUserRole;
   status?: AppUser["status"];
 }): Promise<AppUser> {
-  const hash = await hashPassword(input.password);
-
   return withDb(async (sql) => {
     const rows = await sql`
-      INSERT INTO app_users (id, email, password_hash, name, role, status)
+      INSERT INTO app_users (id, email, password, name, role, status)
       VALUES (
         ${input.id},
         ${input.email},
-        ${hash},
+        ${input.password},
         ${input.name},
         ${input.role},
         ${input.status ?? "active"}
@@ -100,7 +92,7 @@ export async function updateUser(
     if (existing.length === 0) return null;
 
     const current = await sql`
-      SELECT email, name, role, status, password_hash
+      SELECT email, name, role, status, password
       FROM app_users WHERE id = ${id} LIMIT 1
     `;
     const row = current[0];
@@ -109,9 +101,7 @@ export async function updateUser(
     const name = input.name ?? (row.name as string);
     const role = input.role ?? (row.role as AppUserRole);
     const status = input.status ?? (row.status as AppUser["status"]);
-    const passwordHash = input.password
-      ? await hashPassword(input.password)
-      : (row.password_hash as string);
+    const password = input.password ?? (row.password as string);
 
     const rows = await sql`
       UPDATE app_users
@@ -119,7 +109,7 @@ export async function updateUser(
           name = ${name},
           role = ${role},
           status = ${status},
-          password_hash = ${passwordHash}
+          password = ${password}
       WHERE id = ${id}
       RETURNING id, email, name, role, status, created_at
     `;

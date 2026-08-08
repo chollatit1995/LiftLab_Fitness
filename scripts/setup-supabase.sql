@@ -80,18 +80,18 @@ CREATE TABLE IF NOT EXISTS sales (
 CREATE TABLE IF NOT EXISTS app_users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
+  password TEXT NOT NULL,
   name TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'staff',
   status TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ========== ผู้ใช้งานระบบ (รหัสผ่าน: LiftLab@2026) ==========
+-- ========== ผู้ใช้งานระบบ ==========
 
-INSERT INTO app_users (id, email, password_hash, name, role, status) VALUES
-  ('u1', 'admin@liftlab.fitness', '$2b$10$hyAHhP2gRETcfbSJKRuYvuLLVMGeVTpws8xr1UeHswgohR.0ykdz2', 'ผู้ดูแลระบบ', 'admin', 'active'),
-  ('u2', 'manager@liftlab.fitness', '$2b$10$hyAHhP2gRETcfbSJKRuYvuLLVMGeVTpws8xr1UeHswgohR.0ykdz2', 'ผู้จัดการ', 'manager', 'active')
+INSERT INTO app_users (id, email, password, name, role, status) VALUES
+  ('u1', 'admin@liftlab.fitness', 'LiftLab@2026', 'ผู้ดูแลระบบ', 'admin', 'active'),
+  ('u2', 'manager@liftlab.fitness', 'LiftLab@2026', 'ผู้จัดการ', 'manager', 'active')
 ON CONFLICT (id) DO NOTHING;
 
 -- ========== ข้อมูลตัวอย่าง ==========
