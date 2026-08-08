@@ -66,4 +66,13 @@ export const SCHEMA_STATEMENTS = [
     date DATE NOT NULL,
     type TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS app_users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'staff',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ];

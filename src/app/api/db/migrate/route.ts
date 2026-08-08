@@ -6,6 +6,7 @@ import {
   saveAppData,
 } from "@/lib/db";
 import { withDb } from "@/lib/db/client";
+import { seedDefaultUsers } from "@/lib/db/users";
 import { initialData } from "@/lib/store";
 
 async function runMigration() {
@@ -27,12 +28,15 @@ async function runMigration() {
       return { seeded: false };
     });
 
+    await seedDefaultUsers();
+
     return NextResponse.json({
       ok: true,
       message: result.seeded
         ? "Schema created and seed data inserted"
         : "Schema verified (data already exists)",
       seeded: result.seeded,
+      usersSeeded: true,
     });
   } catch (error) {
     console.error("Migration failed:", error);

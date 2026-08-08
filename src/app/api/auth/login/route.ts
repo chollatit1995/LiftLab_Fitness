@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import {
-  createSession,
-  SESSION_COOKIE,
-  validateCredentials,
-} from "@/lib/auth";
+import { createSession, SESSION_COOKIE } from "@/lib/auth";
+import { validateCredentials } from "@/lib/db/users";
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +14,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = validateCredentials(email, password);
+    const user = await validateCredentials(email, password);
     if (!user) {
       return NextResponse.json(
         { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" },
@@ -37,7 +34,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ ok: true, user });
-  } catch {
+  } catch (error) {
+    console.error("Login failed:", error);
     return NextResponse.json({ error: "เกิดข้อผิดพลาด" }, { status: 500 });
   }
 }

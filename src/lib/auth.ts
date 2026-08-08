@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 
 export interface SessionPayload {
+  id: string;
   email: string;
   name: string;
   role: string;
@@ -26,6 +27,7 @@ export async function verifySession(
   try {
     const { payload } = await jwtVerify(token, getSecret());
     return {
+      id: payload.id as string,
       email: payload.email as string,
       name: payload.name as string,
       role: payload.role as string,
@@ -33,32 +35,6 @@ export async function verifySession(
   } catch {
     return null;
   }
-}
-
-export function validateCredentials(
-  email: string,
-  password: string
-): SessionPayload | null {
-  const adminEmail = process.env.ADMIN_EMAIL || "admin@liftlab.fitness";
-  const adminPassword = process.env.ADMIN_PASSWORD || "LiftLab@2026";
-
-  const accounts: { email: string; password: string; name: string; role: string }[] = [
-    { email: adminEmail, password: adminPassword, name: "ผู้ดูแลระบบ", role: "admin" },
-    {
-      email: process.env.MANAGER_EMAIL || "manager@liftlab.fitness",
-      password: process.env.MANAGER_PASSWORD || "LiftLab@2026",
-      name: "ผู้จัดการ",
-      role: "manager",
-    },
-  ];
-
-  const match = accounts.find(
-    (a) => a.email === email && a.password === password
-  );
-
-  if (!match) return null;
-
-  return { email: match.email, name: match.name, role: match.role };
 }
 
 export const SESSION_COOKIE = "liftlab_session";

@@ -198,21 +198,9 @@ function LoginForm() {
           </form>
 
           <div className="mt-8 rounded-xl border border-slate-200 bg-white p-4">
-            <p className="mb-2 text-xs font-semibold text-slate-500">
-              บัญชีทดลองใช้งาน / Demo accounts
+            <p className="text-xs text-slate-500">
+              บัญชีผู้ใช้ถูกจัดการผ่านฐานข้อมูล — ติดต่อ Admin หากต้องการสิทธิ์เข้าใช้งาน
             </p>
-            <div className="space-y-1.5 text-xs text-slate-600">
-              <p>
-                <span className="font-medium">Admin:</span> admin@liftlab.fitness
-              </p>
-              <p>
-                <span className="font-medium">Manager:</span>{" "}
-                manager@liftlab.fitness
-              </p>
-              <p>
-                <span className="font-medium">Password:</span> LiftLab@2026
-              </p>
-            </div>
           </div>
         </div>
       </div>

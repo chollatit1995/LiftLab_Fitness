@@ -163,7 +163,7 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
 }
 
 export async function getOrInitAppData(): Promise<AppData> {
-  return withDb(async (sql) => {
+  const data = await withDb(async (sql) => {
     await ensureSchema(sql);
     const empty = await isDatabaseEmpty(sql);
     if (empty) {
@@ -172,6 +172,11 @@ export async function getOrInitAppData(): Promise<AppData> {
     }
     return loadAppData(sql);
   });
+
+  const { seedDefaultUsers } = await import("./users");
+  await seedDefaultUsers();
+
+  return data;
 }
 
 export async function persistAppData(data: AppData): Promise<void> {
