@@ -9,7 +9,7 @@ import {
 export async function POST() {
   if (!isDbConfigured()) {
     return NextResponse.json(
-      { error: "Database not configured. Set POSTGRES_URL in environment." },
+      { error: "Database not configured. Connect Supabase and set POSTGRES_URL." },
       { status: 503 }
     );
   }

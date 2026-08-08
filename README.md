@@ -22,36 +22,28 @@ npm run dev
 
 ---
 
-## Deploy บน Vercel + Postgres
+## Deploy บน Vercel + Supabase
 
 ### 1. Push ขึ้น GitHub
 
-```bash
-git init
-git add .
-git commit -m "Initial commit: LiftLab Fitness management system"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/liftlab-fitness.git
-git push -u origin main
-```
+Repo: [github.com/chollatit1995/LiftLab_Fitness](https://github.com/chollatit1995/LiftLab_Fitness)
 
 ### 2. เชื่อม Vercel
 
 1. ไปที่ [vercel.com/new](https://vercel.com/new)
 2. Import repository จาก GitHub
-3. Framework: **Next.js** (auto-detect)
-4. กด **Deploy**
+3. กด **Deploy**
 
-### 3. สร้างฐานข้อมูล Postgres บน Vercel
+### 3. สร้างฐานข้อมูล Supabase บน Vercel
 
 1. เปิด Project บน Vercel Dashboard
-2. ไปที่ **Storage** → **Create Database** → เลือก **Postgres**
-3. ตั้งชื่อ เช่น `liftlab-db` → **Create**
-4. เชื่อมกับ Project → Vercel จะ inject env vars อัตโนมัติ:
-   - `POSTGRES_URL`
-   - `POSTGRES_PRISMA_URL`
-   - และอื่นๆ
-5. **Redeploy** project (Settings → Deployments → Redeploy)
+2. ไปที่ **Storage** → **Create Database** → เลือก **Supabase**
+3. ตั้งชื่อ `liftlab-db` → **Create**
+4. **Connect to Project** → เลือก project `liftlab-fitness`
+5. Vercel จะ inject env vars อัตโนมัติ เช่น `POSTGRES_URL`, `NEXT_PUBLIC_SUPABASE_URL`
+6. **Redeploy** project
+
+> ถ้า `POSTGRES_URL` ไม่ถูก inject: ไปที่ Supabase Dashboard → **Settings → Database → Connection string (URI)** → copy แล้วเพิ่มเป็น `POSTGRES_URL` ใน Vercel Environment Variables
 
 ### 4. สร้างตาราง + ข้อมูลตัวอย่าง
 
@@ -96,4 +88,4 @@ Schema SQL: [`scripts/schema.sql`](scripts/schema.sql)
 
 - Next.js 15 + React 19 + TypeScript
 - Tailwind CSS
-- Vercel Postgres (`@vercel/postgres`)
+- Vercel Postgres (`postgres` driver + Supabase)
