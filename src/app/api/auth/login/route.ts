@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
-import { validateCredentials } from "@/lib/db/users";
+import { ensureSchema } from "@/lib/db";
+import { withDb } from "@/lib/db/client";
+import { seedDefaultUsers, validateCredentials } from "@/lib/db/users";
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +15,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // สร้างตาราง app_users + seed บัญชีเริ่มต้นถ้ายังไม่มี
+    await withDb(async (sql) => ensureSchema(sql));
+    await seedDefaultUsers();
 
     const user = await validateCredentials(email, password);
     if (!user) {
