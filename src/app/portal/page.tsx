@@ -4,6 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/Badge";
 import { formatCurrency, formatDate, statusColors } from "@/lib/store";
+import { MembershipPackage, Promotion } from "@/lib/types";
+import {
+  bestOfferFor,
+  daysLeft,
+  discountBadge,
+  promotionsForPackage,
+} from "@/lib/promotions";
+
+interface OfferData {
+  promotions: Promotion[];
+  packages: MembershipPackage[];
+}
 
 interface PortalData {
   member: {
@@ -11,6 +23,7 @@ interface PortalData {
     name: string;
     email: string;
     phone: string;
+    packageId: string;
     joinedAt: string;
     expiresAt: string;
     status: string;
@@ -61,13 +74,19 @@ function daysUntil(dateStr: string): number {
 export default function PortalPage() {
   const router = useRouter();
   const [data, setData] = useState<PortalData | null>(null);
+  const [offers, setOffers] = useState<OfferData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/portal/me");
-      const json = await res.json();
+      const [meRes, offerRes] = await Promise.all([
+        fetch("/api/portal/me"),
+        fetch("/api/promotions"),
+      ]);
+
+      const json = await meRes.json();
       if (json.member) setData(json);
+      if (offerRes.ok) setOffers(await offerRes.json());
     } finally {
       setLoading(false);
     }
@@ -79,7 +98,7 @@ export default function PortalPage() {
 
   const handleLogout = async () => {
     await fetch("/api/portal/logout", { method: "POST" });
-    router.push("/portal/login");
+    router.push("/login");
     router.refresh();
   };
 
@@ -108,6 +127,11 @@ export default function PortalPage() {
   const remaining = daysUntil(member.expiresAt);
   const upcoming = bookings.filter((b) => b.status === "confirmed");
   const history = bookings.filter((b) => b.status !== "confirmed");
+
+  const promotions = offers?.promotions ?? [];
+  const packages = offers?.packages ?? [];
+  const myPromotions = promotionsForPackage(member.packageId, promotions);
+  const otherPackages = packages.filter((p) => p.id !== member.packageId);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -231,6 +255,115 @@ export default function PortalPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {promotions.length > 0 && (
+          <div className="card mb-6">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 className="section-title">โปรโมชั่นสำหรับคุณ</h2>
+                <p className="text-xs text-slate-500">
+                  {myPromotions.length > 0
+                    ? `${myPromotions.length} โปรใช้ได้กับแพ็กเกจของคุณ`
+                    : "โปรที่กำลังเปิดอยู่ทั้งหมด"}
+                </p>
+              </div>
+              <span className="material-symbols-outlined text-[22px] text-rose-500">
+                local_offer
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {promotions.map((promo) => {
+                const usable = myPromotions.some((p) => p.id === promo.id);
+                const left = daysLeft(promo);
+
+                return (
+                  <div key={promo.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-slate-900">
+                            {promo.title}
+                          </p>
+                          {usable && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                              ใช้กับแพ็กเกจคุณได้
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                          {promo.description}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          {promo.code && (
+                            <span className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-2 py-0.5 font-mono font-semibold text-slate-700">
+                              {promo.code}
+                            </span>
+                          )}
+                          <span className="text-slate-400">
+                            ถึง {formatDate(promo.endDate)}
+                            {left >= 0 && left <= 14 && ` · เหลือ ${left} วัน`}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-rose-50 px-2.5 py-1 text-sm font-bold text-rose-600">
+                        {discountBadge(promo)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {otherPackages.length > 0 && (
+          <div className="card mb-6">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="section-title">แพ็กเกจอื่นที่เปิดขาย</h2>
+              <p className="text-xs text-slate-500">
+                ราคาคิดส่วนลดจากโปรที่ใช้ได้ให้แล้ว สนใจแจ้งที่เคาน์เตอร์
+              </p>
+            </div>
+            <div className="grid gap-px bg-slate-100 sm:grid-cols-2">
+              {otherPackages.map((pkg) => {
+                const offer = bestOfferFor(pkg, promotions);
+
+                return (
+                  <div key={pkg.id} className="bg-white px-5 py-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-slate-900">{pkg.name}</p>
+                      {pkg.popular && (
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
+                          แนะนำ
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {pkg.durationDays} วัน
+                    </p>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      {offer ? (
+                        <>
+                          <span className="text-lg font-bold text-rose-600">
+                            {formatCurrency(offer.price)}
+                          </span>
+                          <span className="text-sm text-slate-400 line-through">
+                            {formatCurrency(pkg.price)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-lg font-bold text-slate-900">
+                          {formatCurrency(pkg.price)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

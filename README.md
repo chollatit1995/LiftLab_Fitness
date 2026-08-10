@@ -12,6 +12,7 @@
 - **จัดการสมาชิก** — CRUD สมาชิก ค้นหา กรองสถานะ และต่ออายุแพ็กเกจ (บันทึกยอดขายอัตโนมัติ)
 - **จัดการพนักงาน** — CRUD พนักงานและเทรนเนอร์
 - **คลาส & แพ็กเกจ** — จัดการคลาสและแพ็กเกจสมาชิก
+- **โปรโมชั่น** — ตั้งส่วนลดเป็นเปอร์เซ็นต์ จำนวนเงิน หรือของแถม กำหนดช่วงวันที่และแพ็กเกจที่ใช้ได้ แล้วขึ้นหน้าลูกค้าอัตโนมัติ พร้อมหน้าสาธารณะ `/promotions` ที่เปิดดูได้โดยไม่ต้อง login
 
 ## เริ่มใช้งาน (Local)
 
@@ -73,6 +74,7 @@ curl -X POST https://YOUR-APP.vercel.app/api/db/migrate
 | `staff` | พนักงานและเทรนเนอร์ |
 | `fitness_classes` | คลาสออกกำลังกาย |
 | `membership_packages` | แพ็กเกจสมาชิก |
+| `promotions` | โปรโมชั่นและส่วนลด |
 | `members` | สมาชิก |
 | `facilities` | พื้นที่/ห้อง |
 | `bookings` | การจอง |
@@ -82,6 +84,8 @@ curl -X POST https://YOUR-APP.vercel.app/api/db/migrate
 
 Schema SQL: [`scripts/schema.sql`](scripts/schema.sql)
 
+> ฐานข้อมูลที่มีข้อมูลอยู่แล้วจะได้ตาราง `promotions` เปล่าๆ เพราะ seed จะทำงานเฉพาะตอนฐานข้อมูลว่างทั้งหมด ถ้าอยากได้โปรตัวอย่างให้รัน [`scripts/add-promotions.sql`](scripts/add-promotions.sql) หรือกดเพิ่มเองที่หน้าโปรโมชั่น
+
 ## API
 
 | Method | Endpoint | คำอธิบาย |
@@ -89,6 +93,7 @@ Schema SQL: [`scripts/schema.sql`](scripts/schema.sql)
 | GET | `/api/data` | โหลดข้อมูลทั้งหมด (auto-seed ถ้าว่าง) |
 | PUT | `/api/data` | บันทึกข้อมูลทั้งหมด |
 | POST | `/api/db/migrate` | สร้างตาราง + seed ข้อมูล |
+| GET | `/api/promotions` | โปรที่ใช้ได้ + แพ็กเกจที่เปิดขาย (เปิดสาธารณะ ไม่ต้อง login) |
 | POST | `/api/auth/login` | เข้าสู่ระบบ รับทั้งพนักงานและสมาชิก ตอบ `scope` กลับมา (รับ `rememberMe`) |
 | GET | `/api/auth/me` | ข้อมูล session ปัจจุบัน + เวลาหมดอายุ |
 | GET/PUT | `/api/auth/profile` | ดู/แก้ไขโปรไฟล์ตัวเอง |
@@ -108,6 +113,7 @@ Schema SQL: [`scripts/schema.sql`](scripts/schema.sql)
 | จองคลาส / PT / พื้นที่ | ✓ | ✓ | ✓ |
 | จัดการสมาชิก | ✓ | ✓ | ✓ (ลบไม่ได้) |
 | คลาส & แพ็กเกจ | ✓ | ✓ | ✓ |
+| โปรโมชั่น | ✓ | ✓ | ✗ |
 | จัดการพนักงาน | ✓ | ✓ | ✗ |
 | ผู้ใช้งานระบบ | ✓ | ✗ | ✗ |
 

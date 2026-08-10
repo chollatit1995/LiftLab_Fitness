@@ -146,6 +146,63 @@ export const initialData: AppData = {
       status: "active",
     },
   ],
+  promotions: [
+    {
+      id: "pr1",
+      title: "สมัครใหม่เดือนนี้ ลด 20%",
+      description:
+        "ลูกค้าใหม่ที่สมัครแพ็กเกจ Starter ภายในเดือนนี้ รับส่วนลดทันที 20% ใช้ได้ที่เคาน์เตอร์",
+      discountType: "percent",
+      discountValue: 20,
+      packageId: "p2",
+      code: "NEW20",
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+      status: "active",
+      highlight: true,
+    },
+    {
+      id: "pr2",
+      title: "เพื่อนชวนเพื่อน ลด 500 บาท",
+      description:
+        "แนะนำเพื่อนมาสมัครสมาชิก รับส่วนลด 500 บาททั้งคุณและเพื่อน ใช้ได้กับทุกแพ็กเกจ",
+      discountType: "amount",
+      discountValue: 500,
+      packageId: null,
+      code: "FRIEND500",
+      startDate: "2026-07-01",
+      endDate: "2026-12-31",
+      status: "active",
+      highlight: false,
+    },
+    {
+      id: "pr3",
+      title: "ต่ออายุ Growth รับ PT ฟรี 2 ครั้ง",
+      description:
+        "สมาชิกที่ต่ออายุแพ็กเกจ Growth รับคูปองเทรนเนอร์ส่วนตัวฟรี 2 ครั้ง จองได้ภายใน 60 วัน",
+      discountType: "gift",
+      discountValue: 0,
+      packageId: "p3",
+      code: null,
+      startDate: "2026-08-01",
+      endDate: "2026-09-30",
+      status: "active",
+      highlight: true,
+    },
+    {
+      id: "pr4",
+      title: "โปรต้อนรับปีใหม่ 2026",
+      description: "แคมเปญที่จบไปแล้ว เก็บไว้ดูเป็นประวัติ",
+      discountType: "percent",
+      discountValue: 30,
+      packageId: null,
+      code: "NY2026",
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+      status: "inactive",
+      highlight: false,
+    },
+  ],
   members: [
     {
       id: "m1",
@@ -319,11 +376,16 @@ export const initialData: AppData = {
   ],
 };
 
+/** ข้อมูลที่บันทึกไว้ก่อนมีฟีเจอร์ใหม่จะไม่มีคีย์นั้น เติมค่าว่างกันหน้าเว็บพัง */
+export function withDefaults(data: AppData): AppData {
+  return { ...data, promotions: data.promotions ?? [] };
+}
+
 export function loadData(): AppData {
   if (typeof window === "undefined") return initialData;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored) as AppData;
+    if (stored) return withDefaults(JSON.parse(stored) as AppData);
   } catch {
     /* use initial */
   }

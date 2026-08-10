@@ -10,7 +10,7 @@ import {
   ReactNode,
 } from "react";
 import { AppData } from "./types";
-import { initialData, loadData, saveData } from "./store";
+import { initialData, loadData, saveData, withDefaults } from "./store";
 
 interface DataContextValue {
   data: AppData;
@@ -33,7 +33,7 @@ async function fetchFromApi(): Promise<AppData | null> {
     if (!res.ok) return null;
     const json = await res.json();
     if (json?.error) return null;
-    return json as AppData;
+    return withDefaults(json as AppData);
   } catch {
     return null;
   } finally {

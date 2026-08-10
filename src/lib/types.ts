@@ -33,6 +33,26 @@ export interface MembershipPackage {
   popular?: boolean;
 }
 
+/** gift = ของแถมหรือสิทธิพิเศษที่ไม่ได้ลดราคาเป็นตัวเลข */
+export type PromotionDiscountType = "percent" | "amount" | "gift";
+
+export interface Promotion {
+  id: string;
+  title: string;
+  description: string;
+  discountType: PromotionDiscountType;
+  /** เปอร์เซ็นต์ 0-100 หรือจำนวนเงินบาท — ไม่ใช้เมื่อ discountType เป็น gift */
+  discountValue: number;
+  /** ผูกกับแพ็กเกจใดแพ็กเกจหนึ่ง หรือ null = ใช้ได้กับทุกแพ็กเกจ */
+  packageId: string | null;
+  code: string | null;
+  startDate: string;
+  endDate: string;
+  status: "active" | "inactive";
+  /** ปักหมุดให้ขึ้นก่อนใครในหน้าลูกค้า */
+  highlight: boolean;
+}
+
 export interface Member {
   id: string;
   name: string;
@@ -80,6 +100,7 @@ export interface AppData {
   staff: Staff[];
   classes: FitnessClass[];
   packages: MembershipPackage[];
+  promotions: Promotion[];
   members: Member[];
   bookings: Booking[];
   facilities: Facility[];

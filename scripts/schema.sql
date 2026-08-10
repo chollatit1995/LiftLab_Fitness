@@ -34,6 +34,20 @@ CREATE TABLE IF NOT EXISTS membership_packages (
   popular BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+CREATE TABLE IF NOT EXISTS promotions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  discount_type TEXT NOT NULL DEFAULT 'percent',
+  discount_value NUMERIC NOT NULL DEFAULT 0,
+  package_id TEXT,
+  code TEXT,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  highlight BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 CREATE TABLE IF NOT EXISTS members (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

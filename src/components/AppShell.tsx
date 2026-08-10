@@ -11,7 +11,8 @@ interface User {
   role: string;
 }
 
-const BARE_LAYOUT_PATHS = ["/login", "/change-password"];
+// เทียบตรงตัว เพราะ /promotions เป็นหน้าลูกค้า ส่วน /promotions/manage ยังใช้ sidebar หลังบ้าน
+const BARE_LAYOUT_PATHS = ["/login", "/change-password", "/promotions"];
 
 /** portal ของสมาชิกมี layout ของตัวเอง ไม่ใช้ sidebar หลังบ้าน */
 const BARE_LAYOUT_PREFIXES = ["/portal"];

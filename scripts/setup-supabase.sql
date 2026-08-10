@@ -36,6 +36,20 @@ CREATE TABLE IF NOT EXISTS membership_packages (
   popular BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+CREATE TABLE IF NOT EXISTS promotions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  discount_type TEXT NOT NULL DEFAULT 'percent',
+  discount_value NUMERIC NOT NULL DEFAULT 0,
+  package_id TEXT,
+  code TEXT,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  highlight BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 CREATE TABLE IF NOT EXISTS members (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -133,6 +147,12 @@ INSERT INTO membership_packages (id, name, description, price, duration_days, fe
   ('p2', 'Starter', 'ฟิตเนสกำลังโต', 2990, 90, '["ทุกอย่างใน Mini +","แอปพลิเคชันสำหรับเทรนเนอร์","เชื่อมต่อ LINE Official Account","ระบบ CRM และ Sales Pipeline"]', 'active', true),
   ('p3', 'Growth', 'ขนาดกลาง-ใหญ่', 4990, 180, '["ทุกอย่างใน Starter +","คำนวณค่าคอมมิชชั่น","เชื่อมต่อ POS","เชื่อมต่อ Access Control"]', 'active', false),
   ('p4', 'Accelerate', 'เชนหลายสาขา', 9990, 365, '["ทุกอย่างใน Growth +","Dashboard + Raw Data Export","E-Document","รองรับหลายสาขา"]', 'active', false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO promotions (id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight) VALUES
+  ('pr1', 'สมัครใหม่เดือนนี้ ลด 20%', 'ลูกค้าใหม่ที่สมัครแพ็กเกจ Starter ภายในเดือนนี้ รับส่วนลดทันที 20%', 'percent', 20, 'p2', 'NEW20', '2026-08-01', '2026-08-31', 'active', TRUE),
+  ('pr2', 'เพื่อนชวนเพื่อน ลด 500 บาท', 'แนะนำเพื่อนมาสมัครสมาชิก รับส่วนลด 500 บาททั้งคุณและเพื่อน', 'amount', 500, NULL, 'FRIEND500', '2026-07-01', '2026-12-31', 'active', FALSE),
+  ('pr3', 'ต่ออายุ Growth รับ PT ฟรี 2 ครั้ง', 'สมาชิกที่ต่ออายุแพ็กเกจ Growth รับคูปองเทรนเนอร์ส่วนตัวฟรี 2 ครั้ง', 'gift', 0, 'p3', NULL, '2026-08-01', '2026-09-30', 'active', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO members (id, name, email, phone, package_id, joined_at, expires_at, status) VALUES

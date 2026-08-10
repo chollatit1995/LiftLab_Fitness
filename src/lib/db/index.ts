@@ -19,11 +19,20 @@ export async function isDatabaseEmpty(sql: ReturnType<typeof import("postgres")>
 }
 
 export async function loadAppData(sql: ReturnType<typeof import("postgres")>): Promise<AppData> {
-  const [staff, classes, packages, members, facilities, bookings, sales] =
-    await Promise.all([
+  const [
+    staff,
+    classes,
+    packages,
+    promotions,
+    members,
+    facilities,
+    bookings,
+    sales,
+  ] = await Promise.all([
       sql`SELECT id, name, email, phone, role, status, joined_at FROM staff ORDER BY joined_at`,
       sql`SELECT id, name, description, trainer_id, capacity, duration, schedule, price, status FROM fitness_classes ORDER BY name`,
       sql`SELECT id, name, description, price, duration_days, features, status, popular FROM membership_packages ORDER BY price`,
+      sql`SELECT id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight FROM promotions ORDER BY highlight DESC, end_date`,
       sql`SELECT id, name, email, phone, package_id, joined_at, expires_at, status FROM members ORDER BY joined_at DESC`,
       sql`SELECT id, name, type, capacity, status FROM facilities ORDER BY name`,
       sql`SELECT id, type, member_id, resource_id, resource_name, date, time, status, notes FROM bookings ORDER BY date DESC, time DESC`,
@@ -60,6 +69,19 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       features: r.features as string[],
       status: r.status as AppData["packages"][0]["status"],
       popular: Boolean(r.popular),
+    })),
+    promotions: promotions.map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      description: r.description as string,
+      discountType: r.discount_type as AppData["promotions"][0]["discountType"],
+      discountValue: Number(r.discount_value),
+      packageId: (r.package_id as string | null) ?? null,
+      code: (r.code as string | null) ?? null,
+      startDate: String(r.start_date).slice(0, 10),
+      endDate: String(r.end_date).slice(0, 10),
+      status: r.status as AppData["promotions"][0]["status"],
+      highlight: Boolean(r.highlight),
     })),
     members: members.map((r) => ({
       id: r.id as string,
@@ -107,6 +129,7 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
     await tx`DELETE FROM bookings`;
     await tx`DELETE FROM members`;
     await tx`DELETE FROM fitness_classes`;
+    await tx`DELETE FROM promotions`;
     await tx`DELETE FROM membership_packages`;
     await tx`DELETE FROM facilities`;
     await tx`DELETE FROM staff`;
@@ -129,6 +152,13 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
       await tx`
         INSERT INTO membership_packages (id, name, description, price, duration_days, features, status, popular)
         VALUES (${p.id}, ${p.name}, ${p.description}, ${p.price}, ${p.durationDays}, ${tx.json(p.features)}, ${p.status}, ${p.popular ?? false})
+      `;
+    }
+
+    for (const p of data.promotions ?? []) {
+      await tx`
+        INSERT INTO promotions (id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight)
+        VALUES (${p.id}, ${p.title}, ${p.description}, ${p.discountType}, ${p.discountValue}, ${p.packageId}, ${p.code}, ${p.startDate}, ${p.endDate}, ${p.status}, ${p.highlight})
       `;
     }
 

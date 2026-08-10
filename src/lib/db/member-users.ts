@@ -29,6 +29,7 @@ export interface MemberPortalData {
     name: string;
     email: string;
     phone: string;
+    packageId: string;
     joinedAt: string;
     expiresAt: string;
     status: string;
@@ -240,6 +241,7 @@ export async function loadMemberPortalData(
         name: m.name as string,
         email: m.email as string,
         phone: m.phone as string,
+        packageId: m.package_id as string,
         joinedAt: String(m.joined_at).slice(0, 10),
         expiresAt: String(m.expires_at).slice(0, 10),
         status: m.status as string,
