@@ -24,9 +24,21 @@ const emptyForm = {
   email: "",
   phone: "",
   packageId: "",
+  joinedAt: "",
+  expiresAt: "",
   status: "active" as MemberStatus,
   notes: "",
 };
+
+function expiresFromPackage(
+  joinedAt: string,
+  packageId: string,
+  packages: { id: string; durationDays: number }[]
+): string {
+  const pkg = packages.find((p) => p.id === packageId);
+  if (!joinedAt || !pkg) return joinedAt || todayISO();
+  return addDays(joinedAt, pkg.durationDays);
+}
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(toISODate(dateStr) + "T12:00:00");
@@ -154,9 +166,13 @@ export default function MembersPage() {
 
   const openCreate = () => {
     setEditingId(null);
+    const joinedAt = todayISO();
+    const packageId = activePackages[0]?.id ?? "";
     setForm({
       ...emptyForm,
-      packageId: activePackages[0]?.id ?? "",
+      packageId,
+      joinedAt,
+      expiresAt: expiresFromPackage(joinedAt, packageId, data.packages),
     });
     setModalOpen(true);
   };
@@ -168,6 +184,8 @@ export default function MembersPage() {
       email: member.email,
       phone: member.phone,
       packageId: member.packageId,
+      joinedAt: member.joinedAt,
+      expiresAt: member.expiresAt,
       status: member.status,
       notes: "",
     });
@@ -190,30 +208,27 @@ export default function MembersPage() {
         ...prev,
         members: prev.members.map((m) => {
           if (m.id !== editingId) return m;
-          const packageChanged = m.packageId !== form.packageId;
           return {
             ...m,
             name: form.name,
             email: form.email,
             phone: form.phone,
             packageId: form.packageId,
+            joinedAt: form.joinedAt,
+            expiresAt: form.expiresAt,
             status: form.status,
-            expiresAt: packageChanged
-              ? addDays(m.joinedAt, pkg.durationDays)
-              : m.expiresAt,
           };
         }),
       }));
     } else {
-      const joinedAt = todayISO();
       const newMember: Member = {
         id: generateId("m"),
         name: form.name,
         email: form.email,
         phone: form.phone,
         packageId: form.packageId,
-        joinedAt,
-        expiresAt: addDays(joinedAt, pkg.durationDays),
+        joinedAt: form.joinedAt,
+        expiresAt: form.expiresAt,
         status: form.status,
       };
 
@@ -223,9 +238,9 @@ export default function MembersPage() {
               id: generateId("sl"),
               memberId: newMember.id,
               memberName: newMember.name,
-              item: `${pkg.name} Package (${pkg.durationDays} วัน)`,
+              item: `${pkg.name} Package`,
               amount: pkg.price,
-              date: joinedAt,
+              date: form.joinedAt,
               type: "membership",
             }
           : null;
@@ -561,7 +576,18 @@ export default function MembersPage() {
             <select
               className="input-field"
               value={form.packageId}
-              onChange={(e) => setForm({ ...form, packageId: e.target.value })}
+              onChange={(e) => {
+                const packageId = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  packageId,
+                  expiresAt: expiresFromPackage(
+                    f.joinedAt || todayISO(),
+                    packageId,
+                    data.packages
+                  ),
+                }));
+              }}
               required
             >
               <option value="" disabled>
@@ -576,6 +602,46 @@ export default function MembersPage() {
               ))}
             </select>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label-field">วันเริ่มสมาชิก / Start Date</label>
+              <input
+                type="date"
+                className="input-field"
+                value={form.joinedAt}
+                onChange={(e) => {
+                  const joinedAt = e.target.value;
+                  setForm((f) => ({
+                    ...f,
+                    joinedAt,
+                    expiresAt: expiresFromPackage(
+                      joinedAt,
+                      f.packageId,
+                      data.packages
+                    ),
+                  }));
+                }}
+                required
+              />
+            </div>
+            <div>
+              <label className="label-field">วันหมดอายุ / Expiry Date</label>
+              <input
+                type="date"
+                className="input-field"
+                value={form.expiresAt}
+                min={form.joinedAt}
+                onChange={(e) =>
+                  setForm({ ...form, expiresAt: e.target.value })
+                }
+                required
+              />
+            </div>
+          </div>
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            เลือกแพ็กเกจแล้วระบบจะเสนอวันหมดอายุให้อัตโนมัติ — แก้วันเริ่ม/หมดอายุเองได้ตามต้องการ
+            (เหมาะสำหรับลงข้อมูลสมาชิกเก่า)
+          </p>
           <div>
             <label className="label-field">สถานะ / Status</label>
             <select
@@ -595,7 +661,7 @@ export default function MembersPage() {
           </div>
           {!editingId && form.status === "active" && form.packageId && (
             <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-700">
-              จะบันทึกยอดขายแพ็กเกจอัตโนมัติ และตั้งวันหมดอายุตามระยะเวลาแพ็กเกจ
+              จะบันทึกยอดขายแพ็กเกจอัตโนมัติตามวันเริ่มที่กำหนด
             </p>
           )}
           <div className="flex gap-3 pt-2">
