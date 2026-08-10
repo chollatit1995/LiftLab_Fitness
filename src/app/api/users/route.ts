@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-server";
+import { englishNameOrError } from "@/lib/name";
 import {
   createUser,
   deleteUser,
@@ -44,11 +45,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const checkedName = englishNameOrError(name);
+    if (!checkedName.ok) {
+      return NextResponse.json({ error: checkedName.error }, { status: 400 });
+    }
+
     const user = await createUser({
       id: generateUserId(),
       email,
       password,
-      name,
+      name: checkedName.name,
       role: role as AppUserRole,
       status: status ?? "active",
     });
@@ -81,10 +87,19 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Missing user id" }, { status: 400 });
     }
 
+    let nextName = name;
+    if (name !== undefined) {
+      const checkedName = englishNameOrError(name);
+      if (!checkedName.ok) {
+        return NextResponse.json({ error: checkedName.error }, { status: 400 });
+      }
+      nextName = checkedName.name;
+    }
+
     const user = await updateUser(id, {
       email,
       password: password || undefined,
-      name,
+      name: nextName,
       role: role as AppUserRole,
       status,
     });

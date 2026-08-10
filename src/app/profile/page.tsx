@@ -7,6 +7,12 @@ import { Badge } from "@/components/Badge";
 import { AppUser } from "@/lib/user-types";
 import { isValidRole, roleLabels } from "@/lib/permissions";
 import { formatDate } from "@/lib/store";
+import {
+  ENGLISH_NAME_ERROR,
+  ENGLISH_NAME_HINT,
+  ENGLISH_NAME_PATTERN,
+  filterEnglishNameInput,
+} from "@/lib/name";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -170,9 +176,15 @@ export default function ProfilePage() {
               <input
                 className="input-field"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => setName(filterEnglishNameInput(e.target.value))}
+                placeholder="Somchai Jaidee"
+                pattern={ENGLISH_NAME_PATTERN}
+                title={ENGLISH_NAME_ERROR}
+                lang="en"
+                autoComplete="name"
                 required
               />
+              <p className="mt-1 text-xs text-slate-400">{ENGLISH_NAME_HINT}</p>
             </div>
 
             <div>

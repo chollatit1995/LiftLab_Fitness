@@ -15,6 +15,13 @@ import {
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
 import { formatPhoneInput, handlePhoneKeyDown, handlePhonePaste, phoneDigits, phoneFieldPattern, phoneFieldTitle } from "@/lib/phone";
+import {
+  ENGLISH_NAME_ERROR,
+  ENGLISH_NAME_HINT,
+  ENGLISH_NAME_PATTERN,
+  englishNameOrError,
+  filterEnglishNameInput,
+} from "@/lib/name";
 import { sessionsFromPackage, hasSessionQuota } from "@/lib/sessions";
 import {
   bestOfferFor,
@@ -239,6 +246,13 @@ export default function MembersPage() {
     const pkg = data.packages.find((p) => p.id === form.packageId);
     if (!pkg) return;
 
+    const checkedName = englishNameOrError(form.name);
+    if (!checkedName.ok) {
+      alert(checkedName.error);
+      return;
+    }
+    const name = checkedName.name;
+
     if (editingId) {
       const prev = data.members.find((m) => m.id === editingId);
       const packageChanged = prev?.packageId !== form.packageId;
@@ -252,7 +266,7 @@ export default function MembersPage() {
           if (m.id !== editingId) return m;
           return {
             ...m,
-            name: form.name,
+            name,
             email: form.email,
             phone: form.phone,
             packageId: form.packageId,
@@ -263,13 +277,13 @@ export default function MembersPage() {
           };
         }),
         sales: prev.sales.map((s) =>
-          s.memberId === editingId ? { ...s, memberName: form.name } : s
+          s.memberId === editingId ? { ...s, memberName: name } : s
         ),
       }));
     } else {
       const newMember: Member = {
         id: generateId("m"),
-        name: form.name,
+        name,
         email: form.email,
         phone: form.phone,
         packageId: form.packageId,
@@ -633,9 +647,17 @@ export default function MembersPage() {
             <input
               className="input-field"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, name: filterEnglishNameInput(e.target.value) })
+              }
+              placeholder="Somchai Jaidee"
+              pattern={ENGLISH_NAME_PATTERN}
+              title={ENGLISH_NAME_ERROR}
+              lang="en"
+              autoComplete="name"
               required
             />
+            <p className="mt-1 text-xs text-slate-400">{ENGLISH_NAME_HINT}</p>
           </div>
           <div>
             <label className="label-field">อีเมล / Email</label>

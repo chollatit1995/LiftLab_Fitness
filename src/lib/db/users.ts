@@ -347,13 +347,13 @@ export async function seedDefaultUsers(): Promise<void> {
     {
       id: "u1",
       email: "admin@liftlab.fitness",
-      name: "ผู้ดูแลระบบ",
+      name: "Admin",
       role: "admin" as AppUserRole,
     },
     {
       id: "u2",
       email: "manager@liftlab.fitness",
-      name: "ผู้จัดการ",
+      name: "Manager",
       role: "manager" as AppUserRole,
     },
   ];

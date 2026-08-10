@@ -2,6 +2,10 @@
 
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ENGLISH_NAME_HINT,
+  filterEnglishNameInput,
+} from "@/lib/name";
 
 function LoginForm() {
   const router = useRouter();
@@ -14,6 +18,15 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handleLoginChange = (value: string) => {
+    // อีเมลยังใส่ได้; ชื่อต้องเป็นอังกฤษเท่านั้น
+    if (value.includes("@")) {
+      setLogin(value);
+      return;
+    }
+    setLogin(filterEnglishNameInput(value));
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -148,14 +161,17 @@ function LoginForm() {
                 <input
                   type="text"
                   className="input-field pl-10"
-                  placeholder="เช่น ผู้ดูแลระบบ"
+                  placeholder="Admin"
                   value={login}
-                  onChange={(e) => setLogin(e.target.value)}
+                  onChange={(e) => handleLoginChange(e.target.value)}
                   required
                   autoComplete="username"
-                  autoCapitalize="words"
+                  lang="en"
                 />
               </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {ENGLISH_NAME_HINT} — เช่น Admin / Manager
+              </p>
             </div>
 
             <div>

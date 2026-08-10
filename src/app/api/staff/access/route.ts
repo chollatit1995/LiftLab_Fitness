@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-server";
 import { can } from "@/lib/permissions";
+import { englishNameOrError } from "@/lib/name";
 import { checkPasswordStrength } from "@/lib/password";
 import { createStaffAccount, listStaffAccountIds } from "@/lib/db/users";
 
@@ -35,12 +36,22 @@ export async function POST(request: Request) {
       );
     }
 
+    const checkedName = englishNameOrError(name);
+    if (!checkedName.ok) {
+      return NextResponse.json({ error: checkedName.error }, { status: 400 });
+    }
+
     const strength = checkPasswordStrength(password);
     if (!strength.ok) {
       return NextResponse.json({ error: strength.message }, { status: 400 });
     }
 
-    const result = await createStaffAccount({ staffId, email, name, password });
+    const result = await createStaffAccount({
+      staffId,
+      email,
+      name: checkedName.name,
+      password,
+    });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }

@@ -9,6 +9,13 @@ import { useData } from "@/lib/data-context";
 import { generateId, roleLabels, statusColors } from "@/lib/store";
 import { can } from "@/lib/permissions";
 import { formatPhoneInput, handlePhoneKeyDown, handlePhonePaste, phoneFieldPattern, phoneFieldTitle } from "@/lib/phone";
+import {
+  ENGLISH_NAME_ERROR,
+  ENGLISH_NAME_HINT,
+  ENGLISH_NAME_PATTERN,
+  englishNameOrError,
+  filterEnglishNameInput,
+} from "@/lib/name";
 import { Staff, StaffRole } from "@/lib/types";
 
 const emptyForm = {
@@ -119,17 +126,24 @@ export default function StaffPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const checkedName = englishNameOrError(form.name);
+    if (!checkedName.ok) {
+      alert(checkedName.error);
+      return;
+    }
+    const nextForm = { ...form, name: checkedName.name };
+
     if (editingId) {
       updateData((prev) => ({
         ...prev,
         staff: prev.staff.map((s) =>
-          s.id === editingId ? { ...s, ...form } : s
+          s.id === editingId ? { ...s, ...nextForm } : s
         ),
       }));
     } else {
       const newStaff: Staff = {
         id: generateId("s"),
-        ...form,
+        ...nextForm,
         joinedAt: new Date().toISOString().split("T")[0],
       };
       updateData((prev) => ({
@@ -376,9 +390,17 @@ export default function StaffPage() {
             <input
               className="input-field"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, name: filterEnglishNameInput(e.target.value) })
+              }
+              placeholder="Somchai Jaidee"
+              pattern={ENGLISH_NAME_PATTERN}
+              title={ENGLISH_NAME_ERROR}
+              lang="en"
+              autoComplete="name"
               required
             />
+            <p className="mt-1 text-xs text-slate-400">{ENGLISH_NAME_HINT}</p>
           </div>
           <div>
             <label className="label-field">อีเมล / Email</label>

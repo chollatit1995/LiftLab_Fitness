@@ -6,6 +6,7 @@ import {
   sessionCookieOptions,
 } from "@/lib/auth";
 import { getServerSession } from "@/lib/auth-server";
+import { englishNameOrError } from "@/lib/name";
 import { getUserById, updateOwnProfile } from "@/lib/db/users";
 
 export async function GET() {
@@ -34,13 +35,12 @@ export async function PUT(request: Request) {
 
   try {
     const { name } = await request.json();
-    const trimmed = typeof name === "string" ? name.trim() : "";
-
-    if (!trimmed) {
-      return NextResponse.json({ error: "กรุณากรอกชื่อ" }, { status: 400 });
+    const checked = englishNameOrError(name);
+    if (!checked.ok) {
+      return NextResponse.json({ error: checked.error }, { status: 400 });
     }
 
-    const user = await updateOwnProfile(session.id, trimmed);
+    const user = await updateOwnProfile(session.id, checked.name);
     if (!user) {
       return NextResponse.json({ error: "ไม่พบบัญชีผู้ใช้" }, { status: 404 });
     }
