@@ -15,9 +15,7 @@ import {
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
 import {
-  applyDiscount,
   bestOfferFor,
-  findPromotionByCode,
   livePromotions,
 } from "@/lib/promotions";
 import { Member, MembershipRenewal, Sale } from "@/lib/types";
@@ -68,8 +66,6 @@ export default function MembersPage() {
   const [historyMemberId, setHistoryMemberId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [renewPackageId, setRenewPackageId] = useState("");
-  const [renewPromoCode, setRenewPromoCode] = useState("");
-  const [renewAutoPromo, setRenewAutoPromo] = useState(true);
   const [renewSaving, setRenewSaving] = useState(false);
   const [renewError, setRenewError] = useState("");
   const [memberRenewals, setMemberRenewals] = useState<MembershipRenewal[]>([]);
@@ -209,8 +205,6 @@ export default function MembersPage() {
   const openRenew = (member: Member) => {
     setRenewingId(member.id);
     setRenewPackageId(member.packageId || activePackages[0]?.id || "");
-    setRenewPromoCode("");
-    setRenewAutoPromo(true);
     setRenewError("");
     setRenewModalOpen(true);
   };
@@ -236,30 +230,6 @@ export default function MembersPage() {
       setHistoryLoading(false);
     }
   };
-
-  const renewPricing = useMemo(() => {
-    const pkg = data.packages.find((p) => p.id === renewPackageId);
-    if (!pkg) return null;
-    const promos = livePromotions(data.promotions);
-    if (renewPromoCode.trim()) {
-      const promo = findPromotionByCode(promos, renewPromoCode, renewPackageId);
-      if (promo) {
-        return {
-          original: pkg.price,
-          final: applyDiscount(pkg.price, promo.discountType, promo.discountValue),
-          promo,
-        };
-      }
-      return { original: pkg.price, final: pkg.price, promo: null, invalidCode: true };
-    }
-    if (renewAutoPromo) {
-      const offer = bestOfferFor(pkg, promos);
-      if (offer) {
-        return { original: pkg.price, final: offer.price, promo: offer.promo };
-      }
-    }
-    return { original: pkg.price, final: pkg.price, promo: null };
-  }, [data.packages, data.promotions, renewPackageId, renewPromoCode, renewAutoPromo]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -339,11 +309,6 @@ export default function MembersPage() {
     const member = data.members.find((m) => m.id === renewingId);
     if (!pkg || !member) return;
 
-    if (renewPricing?.invalidCode) {
-      setRenewError("โค้ดโปรไม่ถูกต้องหรือใช้กับแพ็กเกจนี้ไม่ได้");
-      return;
-    }
-
     setRenewSaving(true);
     setRenewError("");
 
@@ -354,8 +319,7 @@ export default function MembersPage() {
         body: JSON.stringify({
           memberId: renewingId,
           packageId: renewPackageId,
-          promoCode: renewPromoCode.trim() || null,
-          autoPromo: renewAutoPromo && !renewPromoCode.trim(),
+          autoPromo: false,
         }),
       });
       const json = await res.json();
@@ -900,8 +864,8 @@ export default function MembersPage() {
                 ))}
               </select>
             </div>
-            {renewPkg && renewPricing && (
-              <div className="space-y-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            {renewPkg && (
+              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 <p>
                   วันหมดอายุใหม่:{" "}
                   <strong>
@@ -915,49 +879,10 @@ export default function MembersPage() {
                     )}
                   </strong>
                 </p>
-                <div className="flex items-baseline gap-2">
-                  {renewPricing.promo ? (
-                    <>
-                      <span className="text-lg font-bold">
-                        {formatCurrency(renewPricing.final)}
-                      </span>
-                      <span className="text-sm line-through opacity-70">
-                        {formatCurrency(renewPricing.original)}
-                      </span>
-                      <span className="rounded-full bg-emerald-200/80 px-2 py-0.5 text-xs font-medium">
-                        {renewPricing.promo.title}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-lg font-bold">
-                      {formatCurrency(renewPricing.final)}
-                    </span>
-                  )}
-                </div>
+                <p className="mt-2 text-lg font-bold">
+                  {formatCurrency(renewPkg.price)}
+                </p>
               </div>
-            )}
-            <div>
-              <label className="label-field">โค้ดโปร (ถ้ามี)</label>
-              <input
-                className="input-field"
-                value={renewPromoCode}
-                onChange={(e) => {
-                  setRenewPromoCode(e.target.value);
-                  if (e.target.value.trim()) setRenewAutoPromo(false);
-                }}
-                placeholder="เช่น NEW20, FRIEND500"
-              />
-            </div>
-            {!renewPromoCode.trim() && (
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={renewAutoPromo}
-                  onChange={(e) => setRenewAutoPromo(e.target.checked)}
-                  className="rounded border-slate-300 text-brand-600"
-                />
-                ใช้โปรที่ดีที่สุดอัตโนมัติ
-              </label>
             )}
             {renewError && (
               <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
