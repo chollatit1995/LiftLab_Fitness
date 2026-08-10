@@ -168,9 +168,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Logo */}
       <div className="border-b border-white/10 px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 to-emerald-400 text-white shadow-lg shadow-brand-900/40">
-            <MaterialIcon name="fitness_center" className="text-[22px]" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="LiftLab Fitness"
+            className="h-11 w-11 shrink-0 rounded-full object-cover shadow-lg shadow-black/30 ring-1 ring-white/20"
+          />
           <div className="min-w-0">
             <p className="truncate text-base font-bold text-white">LiftLab Fitness</p>
             <p className="truncate text-[11px] font-medium uppercase tracking-wider text-emerald-300/80">
@@ -395,9 +397,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <footer className="relative border-t border-slate-200/60 bg-white/60 py-6 backdrop-blur-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-center gap-1 px-4 text-center sm:px-6">
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-brand-600 to-emerald-500 text-white">
-                <MaterialIcon name="fitness_center" className="text-[14px]" />
-              </div>
+              <img
+                src="/logo.png"
+                alt="LiftLab Fitness"
+                className="h-7 w-7 rounded-full object-cover ring-1 ring-slate-200"
+              />
               <span className="text-sm font-semibold text-slate-700">LiftLab Fitness</span>
             </div>
             <p className="text-xs text-slate-400">
