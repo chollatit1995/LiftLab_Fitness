@@ -47,6 +47,13 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["admin", "manager"],
   },
   {
+    href: "/reports",
+    icon: "analytics",
+    labelTh: "รายงาน",
+    labelEn: "Reports",
+    roles: ALL_ROLES,
+  },
+  {
     href: "/staff",
     icon: "group",
     labelTh: "จัดการพนักงาน",
@@ -94,6 +101,7 @@ export type Permission =
   | "members.grantAccess"
   | "classes.edit"
   | "promotions.edit"
+  | "reports.sales"
   | "staff.manage"
   | "staff.grantAccess"
   | "users.manage";
@@ -103,6 +111,7 @@ const PERMISSIONS: Record<Permission, AppUserRole[]> = {
   "members.grantAccess": ["admin", "manager"],
   "classes.edit": ["admin", "manager"],
   "promotions.edit": ["admin", "manager"],
+  "reports.sales": ["admin", "manager"],
   "staff.manage": ["admin", "manager"],
   // บัญชีที่สร้างจากหน้านี้ถูกบังคับเป็น role staff เสมอ manager จึงยกระดับสิทธิ์ใครไม่ได้
   "staff.grantAccess": ["admin", "manager"],

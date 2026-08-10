@@ -36,6 +36,7 @@ function pageTitle(pathname: string): string {
     "/classes": "คลาส & แพ็กเกจ",
     "/staff": "พนักงาน",
     "/promotions/manage": "โปรโมชั่น",
+    "/reports": "รายงาน",
     "/users": "ผู้ใช้งาน",
     "/profile": "โปรไฟล์",
   };
