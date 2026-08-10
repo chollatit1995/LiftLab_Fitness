@@ -6,14 +6,22 @@ import { useRouter } from "next/navigation";
 import {
   bookingTypeMeta,
   classSlotAvailability,
+  dateCardMonth,
+  groupDatesByMonth,
+  isSlotInPast,
+  isTrainerSlotTaken,
   classTimeSlots,
   dayNumber,
-  isTrainerSlotTaken,
   TRAINER_TIME_SLOTS,
   upcomingDates,
   weekdayLabel,
 } from "@/lib/bookings";
 import { formatCurrency, formatDate } from "@/lib/store";
+import { daysUntil } from "@/lib/dates";
+import {
+  hasSessionQuota,
+  sessionsRemaining,
+} from "@/lib/sessions";
 import {
   BookingCatalog,
   BookingCatalogClass,
@@ -23,9 +31,18 @@ import {
 type BookTab = "class" | "trainer";
 type Step = "pick" | "datetime" | "confirm";
 
+interface MemberBookingInfo {
+  expiresAt: string;
+  status: string;
+  sessionsTotal: number | null;
+  sessionsUsed: number;
+  package: { name: string } | null;
+}
+
 export default function PortalBookPage() {
   const router = useRouter();
   const [catalog, setCatalog] = useState<BookingCatalog | null>(null);
+  const [memberInfo, setMemberInfo] = useState<MemberBookingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<BookTab>("class");
   const [step, setStep] = useState<Step>("pick");
@@ -45,9 +62,24 @@ export default function PortalBookPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/portal/bookings");
-      if (res.ok) {
-        setCatalog(await res.json());
+      const [catalogRes, meRes] = await Promise.all([
+        fetch("/api/portal/bookings"),
+        fetch("/api/portal/me"),
+      ]);
+      if (catalogRes.ok) {
+        setCatalog(await catalogRes.json());
+      }
+      if (meRes.ok) {
+        const me = await meRes.json();
+        if (me.member) {
+          setMemberInfo({
+            expiresAt: me.member.expiresAt,
+            status: me.member.status,
+            sessionsTotal: me.member.sessionsTotal ?? null,
+            sessionsUsed: me.member.sessionsUsed ?? 0,
+            package: me.package ? { name: me.package.name } : null,
+          });
+        }
       }
     } finally {
       setLoading(false);
@@ -63,6 +95,27 @@ export default function PortalBookPage() {
     const t = params.get("tab");
     if (t === "trainer" || t === "class") setTab(t);
   }, []);
+
+  const remaining = memberInfo ? daysUntil(memberInfo.expiresAt) : NaN;
+  const isExpired =
+    memberInfo != null &&
+    (memberInfo.status === "expired" ||
+      (Number.isFinite(remaining) && remaining < 0));
+  const isExpiringSoon =
+    memberInfo != null &&
+    !isExpired &&
+    Number.isFinite(remaining) &&
+    remaining >= 0 &&
+    remaining <= 7;
+  const sessionsLeft = memberInfo
+    ? sessionsRemaining(memberInfo.sessionsTotal, memberInfo.sessionsUsed)
+    : null;
+  const ptSessionsFull =
+    tab === "trainer" &&
+    memberInfo != null &&
+    hasSessionQuota(memberInfo.sessionsTotal) &&
+    sessionsLeft === 0;
+  const bookingBlocked = isExpired || ptSessionsFull;
 
   const bookings = useMemo(
     () =>
@@ -87,6 +140,10 @@ export default function PortalBookPage() {
 
   const slotStatus = (time: string) => {
     if (!resourceId || !selectedDate) return { available: true, label: "" };
+
+    if (isSlotInPast(selectedDate, time)) {
+      return { available: false, label: "ผ่านมาแล้ว" };
+    }
 
     if (tab === "trainer") {
       const taken = isTrainerSlotTaken(bookings, resourceId, selectedDate, time);
@@ -123,6 +180,10 @@ export default function PortalBookPage() {
 
   const handleSubmit = async () => {
     setError("");
+    if (isSlotInPast(selectedDate, selectedTime)) {
+      setError("ไม่สามารถจองวันหรือเวลาที่ผ่านมาแล้ว");
+      return;
+    }
     setSubmitting(true);
     try {
       const resourceName =
@@ -165,6 +226,8 @@ export default function PortalBookPage() {
     );
   }
 
+  const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
+
   const classMeta = bookingTypeMeta("class");
   const trainerMeta = bookingTypeMeta("trainer");
 
@@ -187,8 +250,77 @@ export default function PortalBookPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+        {/* แจ้งเตือนหมดอายุ / ใกล้หมดอายุ / ครั้ง PT หมด */}
+        {isExpired && (
+          <div className="mb-6 flex items-start gap-4 rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-50 to-rose-50 px-5 py-4 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100">
+              <span className="material-symbols-outlined text-[22px] text-red-600">
+                event_busy
+              </span>
+            </div>
+            <div>
+              <p className="font-semibold text-red-900">แพ็กเกจหมดอายุแล้ว</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-red-800/90">
+                {memberInfo?.package?.name && (
+                  <>
+                    แพ็กเกจ <strong>{memberInfo.package.name}</strong> หมดอายุเมื่อ{" "}
+                    {formatDate(memberInfo.expiresAt)} —{" "}
+                  </>
+                )}
+                ไม่สามารถจองคลาสหรือเทรนเนอร์ได้ กรุณาติดต่อเคาน์เตอร์ LiftLab
+                เพื่อต่ออายุสมาชิก
+              </p>
+              <Link
+                href="/portal"
+                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-red-700 hover:text-red-800"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  arrow_back
+                </span>
+                กลับหน้า Portal
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {!isExpired && isExpiringSoon && (
+          <div className="mb-6 flex items-start gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+              <span className="material-symbols-outlined text-[22px] text-amber-600">
+                schedule
+              </span>
+            </div>
+            <div>
+              <p className="font-semibold text-amber-900">ใกล้หมดอายุแล้ว</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-amber-800/90">
+                แพ็กเกจจะหมดอายุในอีก {remaining} วัน (วันที่{" "}
+                {memberInfo && formatDate(memberInfo.expiresAt)}) — ติดต่อเคาน์เตอร์เพื่อต่ออายุ
+                ก่อนจะไม่สามารถจองได้
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!isExpired && ptSessionsFull && (
+          <div className="mb-6 flex items-start gap-4 rounded-2xl border border-orange-200/80 bg-gradient-to-r from-orange-50 to-amber-50 px-5 py-4 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100">
+              <span className="material-symbols-outlined text-[22px] text-orange-600">
+                block
+              </span>
+            </div>
+            <div>
+              <p className="font-semibold text-orange-900">ใช้ครั้งเทรนครบแล้ว</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-orange-800/90">
+                คุณใช้ครั้ง PT ครบ{" "}
+                {memberInfo?.sessionsTotal} ครั้งแล้ว — ไม่สามารถจองเทรนเนอร์เพิ่มได้
+                กรุณาต่ออายุหรือติดต่อเคาน์เตอร์
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Tab switcher */}
-        <div className="mb-6 grid grid-cols-2 gap-3">
+        <div className={`mb-6 grid grid-cols-2 gap-3 ${isExpired ? "pointer-events-none opacity-50" : ""}`}>
           {(
             [
               { key: "class" as BookTab, meta: classMeta },
@@ -218,7 +350,7 @@ export default function PortalBookPage() {
         </div>
 
         {/* Step: Pick resource */}
-        {step === "pick" && (
+        {step === "pick" && !bookingBlocked && (
           <section className="space-y-3">
             <h2 className="text-lg font-bold text-slate-900">
               {tab === "class" ? "เลือกคลาส" : "เลือกเทรนเนอร์"}
@@ -288,8 +420,14 @@ export default function PortalBookPage() {
           </section>
         )}
 
+        {step === "pick" && bookingBlocked && !isExpired && (
+          <p className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500">
+            เลือกแท็บ &quot;จองคลาส&quot; หรือติดต่อเคาน์เตอร์เพื่อต่ออายุแพ็กเกจ PT
+          </p>
+        )}
+
         {/* Step: Date & Time */}
-        {step === "datetime" && (
+        {step === "datetime" && !bookingBlocked && (
           <section className="space-y-6">
             <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
               <p className="text-xs text-slate-500">กำลังจอง</p>
@@ -299,32 +437,58 @@ export default function PortalBookPage() {
             </div>
 
             <div>
-              <p className="mb-3 text-sm font-semibold text-slate-700">เลือกวันที่</p>
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {dates.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate(d);
-                      setSelectedTime("");
-                    }}
-                    className={`flex min-w-[4.5rem] shrink-0 flex-col items-center rounded-xl border-2 px-3 py-2.5 transition ${
-                      selectedDate === d
-                        ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-slate-200 bg-white hover:border-brand-200"
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase">{weekdayLabel(d)}</span>
-                    <span className="text-lg font-bold">{dayNumber(d)}</span>
-                  </button>
+              <div className="mb-3 flex items-end justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700">เลือกวันที่</p>
+                {selectedDate && (
+                  <p className="text-xs font-medium text-brand-700">
+                    {formatDate(selectedDate)}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-4">
+                {dateGroups.map((group) => (
+                  <div key={group.monthKey}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      {group.label}
+                    </p>
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {group.dates.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(d);
+                            setSelectedTime("");
+                          }}
+                          className={`flex min-w-[4.75rem] shrink-0 flex-col items-center rounded-xl border-2 px-3 py-2.5 transition ${
+                            selectedDate === d
+                              ? "border-brand-500 bg-brand-50 text-brand-700 shadow-sm"
+                              : "border-slate-200 bg-white hover:border-brand-200"
+                          }`}
+                        >
+                          <span className="text-[10px] uppercase text-slate-500">
+                            {weekdayLabel(d)}
+                          </span>
+                          <span className="text-lg font-bold leading-tight">
+                            {dayNumber(d)}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-500">
+                            {dateCardMonth(d)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
 
             {selectedDate && (
               <div>
-                <p className="mb-3 text-sm font-semibold text-slate-700">เลือกเวลา</p>
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-700">เลือกเวลา</p>
+                  <p className="text-xs text-slate-500">{formatDate(selectedDate)}</p>
+                </div>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {timeSlots.map((time) => {
                     const status = slotStatus(time);
@@ -388,7 +552,7 @@ export default function PortalBookPage() {
         )}
 
         {/* Step: Confirm */}
-        {step === "confirm" && (
+        {step === "confirm" && !bookingBlocked && (
           <section className="space-y-5">
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
               <div

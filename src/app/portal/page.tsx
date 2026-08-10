@@ -369,11 +369,50 @@ export default function PortalPage() {
           </div>
         </section>
 
+        {/* แจ้งเตือนหมดอายุ — ก่อนปุ่มจอง */}
+        {Number.isFinite(remaining) && remaining < 0 && (
+          <div className="mb-6 flex items-start gap-4 rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-50 to-rose-50 px-5 py-4 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100">
+              <span className="material-symbols-outlined text-[22px] text-red-600">
+                event_busy
+              </span>
+            </div>
+            <div>
+              <p className="font-semibold text-red-900">แพ็กเกจหมดอายุแล้ว</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-red-800/90">
+                หมดอายุเมื่อ {formatDate(member.expiresAt)} — ไม่สามารถจองคลาสหรือเทรนเนอร์ได้
+                ติดต่อเคาน์เตอร์ LiftLab เพื่อต่ออายุ
+              </p>
+            </div>
+          </div>
+        )}
+
+        {Number.isFinite(remaining) && remaining >= 0 && remaining <= 7 && (
+          <div className="mb-6 flex items-start gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+              <span className="material-symbols-outlined text-[22px] text-amber-600">
+                schedule
+              </span>
+            </div>
+            <div>
+              <p className="font-semibold text-amber-900">ใกล้หมดอายุแล้ว!</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-amber-800/90">
+                แพ็กเกจของคุณจะหมดอายุในอีก {remaining} วัน
+                ติดต่อเคาน์เตอร์เพื่อต่ออายุได้เลย
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Quick actions — จองคลาส & PT */}
         <section className="mb-8 grid gap-3 sm:grid-cols-2">
           <Link
             href="/portal/book?tab=class"
-            className="group flex items-center gap-4 rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm transition hover:border-violet-300 hover:shadow-md"
+            className={`group flex items-center gap-4 rounded-2xl border p-5 shadow-sm transition ${
+              Number.isFinite(remaining) && remaining < 0
+                ? "pointer-events-none border-slate-200 bg-slate-50 opacity-60"
+                : "border-violet-200/80 bg-gradient-to-br from-violet-50 to-white hover:border-violet-300 hover:shadow-md"
+            }`}
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md">
               <span className="material-symbols-outlined text-[24px]">
@@ -382,7 +421,11 @@ export default function PortalPage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-slate-900">จองคลาส</p>
-              <p className="text-xs text-slate-500">HIIT, Yoga, Spin และอื่นๆ</p>
+              <p className="text-xs text-slate-500">
+                {Number.isFinite(remaining) && remaining < 0
+                  ? "แพ็กเกจหมดอายุ — ต่ออายุก่อนจอง"
+                  : "HIIT, Yoga, Spin และอื่นๆ"}
+              </p>
             </div>
             <span className="material-symbols-outlined text-[20px] text-violet-400 transition group-hover:translate-x-0.5 group-hover:text-violet-600">
               arrow_forward
@@ -390,14 +433,22 @@ export default function PortalPage() {
           </Link>
           <Link
             href="/portal/book?tab=trainer"
-            className="group flex items-center gap-4 rounded-2xl border border-brand-200/80 bg-gradient-to-br from-brand-50 to-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md"
+            className={`group flex items-center gap-4 rounded-2xl border p-5 shadow-sm transition ${
+              Number.isFinite(remaining) && remaining < 0
+                ? "pointer-events-none border-slate-200 bg-slate-50 opacity-60"
+                : "border-brand-200/80 bg-gradient-to-br from-brand-50 to-white hover:border-brand-300 hover:shadow-md"
+            }`}
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-emerald-500 text-white shadow-md">
               <span className="material-symbols-outlined text-[24px]">person</span>
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-slate-900">จองเทรนเนอร์ (PT)</p>
-              <p className="text-xs text-slate-500">Personal Training 1-on-1</p>
+              <p className="text-xs text-slate-500">
+                {Number.isFinite(remaining) && remaining < 0
+                  ? "แพ็กเกจหมดอายุ — ต่ออายุก่อนจอง"
+                  : "Personal Training 1-on-1"}
+              </p>
             </div>
             <span className="material-symbols-outlined text-[20px] text-brand-400 transition group-hover:translate-x-0.5 group-hover:text-brand-600">
               arrow_forward
@@ -511,24 +562,6 @@ export default function PortalPage() {
             ))}
           </div>
         </section>
-
-        {/* Expiry alert */}
-        {Number.isFinite(remaining) && remaining >= 0 && remaining <= 7 && (
-          <div className="mb-8 flex items-start gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 shadow-sm">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
-              <span className="material-symbols-outlined text-[22px] text-amber-600">
-                schedule
-              </span>
-            </div>
-            <div>
-              <p className="font-semibold text-amber-900">ใกล้หมดอายุแล้ว!</p>
-              <p className="mt-0.5 text-sm leading-relaxed text-amber-800/90">
-                แพ็กเกจของคุณจะหมดอายุในอีก {remaining} วัน
-                ติดต่อเคาน์เตอร์เพื่อต่ออายุได้เลย
-              </p>
-            </div>
-          </div>
-        )}
 
         <div className="grid gap-8 lg:grid-cols-5">
           {/* Left column */}

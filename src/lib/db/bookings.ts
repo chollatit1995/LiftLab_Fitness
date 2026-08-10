@@ -3,6 +3,7 @@ import { hasSessionQuota, sessionsRemaining } from "../sessions";
 import { toISODate, todayISO } from "../dates";
 import {
   classSlotAvailability,
+  isSlotInPast,
   isTrainerSlotTaken,
   memberAlreadyBooked,
 } from "../bookings";
@@ -123,6 +124,9 @@ export async function createMemberBooking(input: {
     }
     if (input.date < todayISO()) {
       return { ok: false, error: "ไม่สามารถจองวันที่ผ่านมาแล้ว" };
+    }
+    if (isSlotInPast(input.date, input.time)) {
+      return { ok: false, error: "ไม่สามารถจองเวลาที่ผ่านมาแล้ว" };
     }
 
     const existingRows = await sql`

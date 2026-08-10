@@ -8,7 +8,10 @@ import { useData } from "@/lib/data-context";
 import {
   bookingTypeMeta,
   classSlotAvailability,
+  dateCardMonth,
   dayNumber,
+  groupDatesByMonth,
+  isSlotInPast,
   isTrainerSlotTaken,
   memberAlreadyBooked,
   slotsForType,
@@ -48,6 +51,7 @@ export default function BookingsPage() {
   const [notes, setNotes] = useState("");
 
   const dates = useMemo(() => upcomingDates(14), []);
+  const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
   const today = todayISO();
 
   const stats = useMemo(() => {
@@ -106,6 +110,10 @@ export default function BookingsPage() {
   const slotStatus = (time: string) => {
     if (!resourceId || !selectedDate) return { available: true, label: "" };
 
+    if (isSlotInPast(selectedDate, time)) {
+      return { available: false, label: "ผ่านมาแล้ว" };
+    }
+
     if (bookingType === "trainer") {
       const taken = isTrainerSlotTaken(data.bookings, resourceId, selectedDate, time);
       return { available: !taken, label: taken ? "ไม่ว่าง" : "ว่าง" };
@@ -129,6 +137,7 @@ export default function BookingsPage() {
   const handleConfirm = () => {
     const resourceName = getResourceName();
     if (!resourceName || !memberId || !selectedDate || !selectedTime) return;
+    if (isSlotInPast(selectedDate, selectedTime)) return;
 
     const booking: Booking = {
       id: generateId("b"),
@@ -585,32 +594,58 @@ export default function BookingsPage() {
         {step === "datetime" && (
           <div className="space-y-5">
             <div>
-              <p className="label-field mb-2">เลือกวันที่</p>
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {dates.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate(d);
-                      setSelectedTime("");
-                    }}
-                    className={`flex min-w-[4.5rem] shrink-0 flex-col items-center rounded-xl border-2 px-3 py-2 transition ${
-                      selectedDate === d
-                        ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-slate-200 hover:border-brand-200"
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase">{weekdayLabel(d)}</span>
-                    <span className="text-lg font-bold">{dayNumber(d)}</span>
-                  </button>
+              <div className="mb-2 flex items-end justify-between gap-3">
+                <p className="label-field mb-0">เลือกวันที่</p>
+                {selectedDate && (
+                  <p className="text-xs font-medium text-brand-700">
+                    {formatDate(selectedDate)}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-4">
+                {dateGroups.map((group) => (
+                  <div key={group.monthKey}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      {group.label}
+                    </p>
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {group.dates.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(d);
+                            setSelectedTime("");
+                          }}
+                          className={`flex min-w-[4.75rem] shrink-0 flex-col items-center rounded-xl border-2 px-3 py-2 transition ${
+                            selectedDate === d
+                              ? "border-brand-500 bg-brand-50 text-brand-700 shadow-sm"
+                              : "border-slate-200 hover:border-brand-200"
+                          }`}
+                        >
+                          <span className="text-[10px] uppercase text-slate-500">
+                            {weekdayLabel(d)}
+                          </span>
+                          <span className="text-lg font-bold leading-tight">
+                            {dayNumber(d)}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-500">
+                            {dateCardMonth(d)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
 
             {selectedDate && (
               <div>
-                <p className="label-field mb-2">เลือกเวลา</p>
+                <div className="mb-2 flex items-end justify-between gap-3">
+                  <p className="label-field mb-0">เลือกเวลา</p>
+                  <p className="text-xs text-slate-500">{formatDate(selectedDate)}</p>
+                </div>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {timeSlots.map((time) => {
                     const status = slotStatus(time);

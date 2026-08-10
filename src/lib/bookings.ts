@@ -58,6 +58,58 @@ export function dayNumber(dateStr: string): string {
   return dateStr.slice(8, 10);
 }
 
+/** เดือน + ปี สำหรับหัวข้อเลือกวันที่ (เช่น สิงหาคม 2569) */
+export function monthYearLabel(dateStr: string): string {
+  const iso = dateStr.slice(0, 10);
+  return new Intl.DateTimeFormat("th-TH", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(iso + "T12:00:00"));
+}
+
+/** ชื่อเดือนย่อบนการ์ดวันที่ (เช่น ส.ค.) */
+export function dateCardMonth(dateStr: string): string {
+  const iso = dateStr.slice(0, 10);
+  return new Intl.DateTimeFormat("th-TH", { month: "short" }).format(
+    new Date(iso + "T12:00:00")
+  );
+}
+
+/** ตรวจว่า slot วัน+เวลานี้ผ่านมาแล้วหรือไม่ (ใช้เวลา local) */
+export function isSlotInPast(
+  date: string,
+  time: string,
+  now: Date = new Date()
+): boolean {
+  const iso = date.slice(0, 10);
+  const today = todayISO();
+  if (iso < today) return true;
+  if (iso > today) return false;
+
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return false;
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const slotMins = h * 60 + m;
+  return slotMins <= nowMins;
+}
+
+/** จัดกลุ่มวันที่ตามเดือน — สำหรับแสดงหัวเดือนแบบเว็บสายการบิน */
+export function groupDatesByMonth(
+  dates: string[]
+): { monthKey: string; label: string; dates: string[] }[] {
+  const groups: { monthKey: string; label: string; dates: string[] }[] = [];
+  for (const d of dates) {
+    const monthKey = d.slice(0, 7);
+    const last = groups[groups.length - 1];
+    if (last?.monthKey === monthKey) {
+      last.dates.push(d);
+    } else {
+      groups.push({ monthKey, label: monthYearLabel(d), dates: [d] });
+    }
+  }
+  return groups;
+}
+
 export function countSlotBookings(
   bookings: Pick<Booking, "resourceId" | "date" | "time" | "status">[],
   resourceId: string,
