@@ -37,19 +37,33 @@ export default function DashboardPage() {
   }, []);
 
   const stats = useMemo(() => {
+    const memberIds = new Set(data.members.map((m) => m.id));
+    const linkedSales = data.sales.filter((s) => memberIds.has(s.memberId));
+
     const activeMembers = data.members.filter((m) => m.status === "active").length;
     const activeClasses = data.classes.filter((c) => c.status === "active").length;
-    const totalSales = data.sales.reduce((sum, s) => sum + s.amount, 0);
-    const today = new Date().toISOString().split("T")[0];
+    const totalSales = linkedSales.reduce((sum, s) => sum + s.amount, 0);
+    const today = todayISO();
     const monthPrefix = today.slice(0, 7);
     const todayBookings = data.bookings.filter(
       (b) => b.date === today && b.status === "confirmed"
     ).length;
-    const monthlySales = data.sales
+    const monthlySales = linkedSales
       .filter((s) => s.date.startsWith(monthPrefix))
       .reduce((sum, s) => sum + s.amount, 0);
 
-    return { activeMembers, activeClasses, totalSales, todayBookings, monthlySales };
+    const newMembersThisMonth = data.members.filter((m) =>
+      m.joinedAt.startsWith(monthPrefix)
+    ).length;
+
+    return {
+      activeMembers,
+      activeClasses,
+      totalSales,
+      todayBookings,
+      monthlySales,
+      newMembersThisMonth,
+    };
   }, [data]);
 
   const alerts = useMemo(() => {
@@ -66,9 +80,13 @@ export default function DashboardPage() {
     return { expiringSoon, expired, todayBookings };
   }, [data]);
 
-  const recentSales = [...data.sales]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 5);
+  const recentSales = useMemo(() => {
+    const memberIds = new Set(data.members.map((m) => m.id));
+    return [...data.sales]
+      .filter((s) => memberIds.has(s.memberId))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+  }, [data.members, data.sales]);
 
   const upcomingBookings = data.bookings
     .filter((b) => b.status === "confirmed")
@@ -199,7 +217,11 @@ export default function DashboardPage() {
           labelTh="สมาชิกที่ใช้งาน"
           labelEn="Active Members"
           value={stats.activeMembers}
-          change="+2 เดือนนี้"
+          change={
+            stats.newMembersThisMonth > 0
+              ? `+${stats.newMembersThisMonth} เดือนนี้`
+              : undefined
+          }
           changeType="up"
           accent="green"
         />
@@ -215,8 +237,6 @@ export default function DashboardPage() {
           labelTh="ยอดขายเดือนนี้"
           labelEn="Monthly Sales"
           value={formatCurrency(stats.monthlySales)}
-          change="+12% vs เดือนก่อน"
-          changeType="up"
           accent="purple"
         />
         <StatCard

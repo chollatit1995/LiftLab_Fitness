@@ -219,6 +219,9 @@ export default function MembersPage() {
             status: form.status,
           };
         }),
+        sales: prev.sales.map((s) =>
+          s.memberId === editingId ? { ...s, memberName: form.name } : s
+        ),
       }));
     } else {
       const newMember: Member = {
@@ -298,13 +301,31 @@ export default function MembersPage() {
     setRenewingId(null);
   };
 
-  const deleteMember = (id: string) => {
+  const deleteMember = async (id: string) => {
     if (!canDelete) return;
-    if (!confirm("ต้องการลบสมาชิกคนนี้? การจองที่เกี่ยวข้องจะยังคงอยู่")) return;
+    if (
+      !confirm(
+        "ต้องการลบสมาชิกคนนี้? ยอดขายและการจองที่เกี่ยวข้องจะถูกลบด้วย"
+      )
+    )
+      return;
+
+    if (portalMemberIds.includes(id)) {
+      try {
+        await fetch(`/api/members/access?memberId=${id}`, { method: "DELETE" });
+      } catch {
+        /* ignore */
+      }
+    }
+
     updateData((prev) => ({
       ...prev,
       members: prev.members.filter((m) => m.id !== id),
+      sales: prev.sales.filter((s) => s.memberId !== id),
+      bookings: prev.bookings.filter((b) => b.memberId !== id),
     }));
+
+    loadPortalAccounts();
   };
 
   if (!hydrated) {
