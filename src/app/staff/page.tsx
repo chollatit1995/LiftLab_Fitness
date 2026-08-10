@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
+import { PasswordField } from "@/components/PasswordField";
 import { useData } from "@/lib/data-context";
 import { generateId, roleLabels, statusColors } from "@/lib/store";
 import { can } from "@/lib/permissions";
@@ -301,6 +302,17 @@ export default function StaffPage() {
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                   {accessMessage}
                 </div>
+                <div className="rounded-xl bg-slate-900 px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400">
+                    รหัสผ่านที่ตั้งไว้
+                  </p>
+                  <p className="mt-1 font-mono text-lg font-bold text-white">
+                    {accessPassword}
+                  </p>
+                </div>
+                <p className="text-xs text-slate-400">
+                  จดหรือคัดลอกไว้ก่อนปิดหน้าต่างนี้ — ระบบจะไม่แสดงรหัสนี้อีก
+                </p>
                 <button
                   type="button"
                   className="btn-primary w-full"
@@ -318,20 +330,11 @@ export default function StaffPage() {
                   <p className="text-xs text-slate-500">{accessTarget.email}</p>
                 </div>
 
-                <div>
-                  <label className="label-field">
-                    รหัสผ่านชั่วคราว / Temporary Password
-                  </label>
-                  <input
-                    className="input-field"
-                    value={accessPassword}
-                    onChange={(e) => setAccessPassword(e.target.value)}
-                    required
-                  />
-                  <p className="mt-1.5 text-xs text-slate-400">
-                    อย่างน้อย 8 ตัวอักษร มีทั้งตัวอักษรและตัวเลข — ระบบจะบังคับให้เจ้าตัวเปลี่ยนเมื่อ login ครั้งแรก
-                  </p>
-                </div>
+                <PasswordField
+                  value={accessPassword}
+                  onChange={setAccessPassword}
+                  hint="กดลูกเต๋าเพื่อสุ่มรหัส แล้วกดคัดลอกไปแจ้งเจ้าตัว — ระบบจะบังคับให้เปลี่ยนเมื่อ login ครั้งแรก"
+                />
 
                 <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-700">
                   บัญชีที่สร้างจะได้สิทธิ์ระดับ &quot;พนักงาน&quot; เท่านั้น
