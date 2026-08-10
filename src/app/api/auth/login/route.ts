@@ -16,16 +16,17 @@ import { authenticateMember } from "@/lib/db/member-users";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, rememberMe } = await request.json();
+    const body = await request.json();
+    const login = String(body.login ?? body.name ?? body.email ?? "").trim();
+    const password = body.password;
+    const rememberMe = Boolean(body.rememberMe);
 
-    if (!email || !password) {
+    if (!login || !password) {
       return NextResponse.json(
-        { error: "กรุณากรอกอีเมลและรหัสผ่าน" },
+        { error: "กรุณากรอกชื่อและรหัสผ่าน" },
         { status: 400 }
       );
     }
-
-    const normalizedEmail = String(email).trim().toLowerCase();
 
     // สร้าง/อัปเดตตาราง app_users + seed บัญชีเริ่มต้นถ้ายังไม่มี
     await withDb(async (sql) => ensureSchema(sql));
@@ -34,8 +35,8 @@ export async function POST(request: Request) {
     const maxAge = rememberMe ? SESSION_MAX_AGE_REMEMBERED : SESSION_MAX_AGE;
     const cookieStore = await cookies();
 
-    // พนักงานมาก่อน ถ้าอีเมลไม่ได้อยู่ใน app_users หรือรหัสไม่ตรง ค่อยลองฝั่งสมาชิก
-    const staffResult = await authenticate(normalizedEmail, password);
+    // พนักงานมาก่อน ถ้าชื่อ/อีเมลไม่ได้อยู่ใน app_users หรือรหัสไม่ตรง ค่อยลองฝั่งสมาชิก
+    const staffResult = await authenticate(login, password);
 
     if (staffResult.ok) {
       const token = await createSession({ ...staffResult.user, maxAge });
@@ -49,6 +50,16 @@ export async function POST(request: Request) {
       });
     }
 
+    if (staffResult.reason === "ambiguous") {
+      return NextResponse.json(
+        {
+          error:
+            "พบชื่อซ้ำในระบบ กรุณาใช้ชื่อให้ตรงกับบัญชี หรือติดต่อผู้ดูแลระบบ",
+        },
+        { status: 409 }
+      );
+    }
+
     if (staffResult.reason === "locked") {
       return NextResponse.json(
         {
@@ -58,7 +69,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const memberResult = await authenticateMember(normalizedEmail, password);
+    const memberResult = await authenticateMember(login, password);
 
     if (memberResult.ok) {
       const token = await createMemberSession({ ...memberResult.member, maxAge });
@@ -76,6 +87,16 @@ export async function POST(request: Request) {
       });
     }
 
+    if (memberResult.reason === "ambiguous") {
+      return NextResponse.json(
+        {
+          error:
+            "พบชื่อสมาชิกซ้ำในระบบ กรุณาติดต่อเคาน์เตอร์เพื่อยืนยันบัญชี",
+        },
+        { status: 409 }
+      );
+    }
+
     if (memberResult.reason === "locked") {
       return NextResponse.json(
         {
@@ -85,7 +106,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // เตือนจำนวนครั้งที่เหลือได้เฉพาะตอนที่รู้ว่าอีเมลมีอยู่จริงในฝั่งพนักงาน
+    // เตือนจำนวนครั้งที่เหลือได้เฉพาะตอนที่รู้ว่าชื่อมีอยู่จริงในฝั่งพนักงาน
     const suffix =
       staffResult.remainingAttempts !== null &&
       staffResult.remainingAttempts <= 2
@@ -93,7 +114,7 @@ export async function POST(request: Request) {
         : "";
 
     return NextResponse.json(
-      { error: `อีเมลหรือรหัสผ่านไม่ถูกต้อง${suffix}` },
+      { error: `ชื่อหรือรหัสผ่านไม่ถูกต้อง${suffix}` },
       { status: 401 }
     );
   } catch (error) {

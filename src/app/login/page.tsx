@@ -8,7 +8,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/";
 
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +24,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, rememberMe }),
+        body: JSON.stringify({ login, password, rememberMe }),
       });
 
       const data = await res.json();
@@ -140,19 +140,20 @@ function LoginForm() {
             )}
 
             <div>
-              <label className="label-field">อีเมล / Email</label>
+              <label className="label-field">ชื่อ / Name</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
-                  mail
+                  person
                 </span>
                 <input
-                  type="email"
+                  type="text"
                   className="input-field pl-10"
-                  placeholder="admin@liftlab.fitness"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="เช่น ผู้ดูแลระบบ"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
                   required
-                  autoComplete="email"
+                  autoComplete="username"
+                  autoCapitalize="words"
                 />
               </div>
             </div>

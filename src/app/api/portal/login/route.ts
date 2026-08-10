@@ -13,20 +13,32 @@ import { authenticateMember } from "@/lib/db/member-users";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, rememberMe } = await request.json();
+    const body = await request.json();
+    const login = String(body.login ?? body.name ?? body.email ?? "").trim();
+    const password = body.password;
+    const rememberMe = Boolean(body.rememberMe);
 
-    if (!email || !password) {
+    if (!login || !password) {
       return NextResponse.json(
-        { error: "กรุณากรอกอีเมลและรหัสผ่าน" },
+        { error: "กรุณากรอกชื่อและรหัสผ่าน" },
         { status: 400 }
       );
     }
 
     await withDb(async (sql) => ensureSchema(sql));
 
-    const result = await authenticateMember(email, password);
+    const result = await authenticateMember(login, password);
 
     if (!result.ok) {
+      if (result.reason === "ambiguous") {
+        return NextResponse.json(
+          {
+            error:
+              "พบชื่อสมาชิกซ้ำในระบบ กรุณาติดต่อเคาน์เตอร์เพื่อยืนยันบัญชี",
+          },
+          { status: 409 }
+        );
+      }
       if (result.reason === "locked") {
         return NextResponse.json(
           {
@@ -36,7 +48,7 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json(
-        { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" },
+        { error: "ชื่อหรือรหัสผ่านไม่ถูกต้อง" },
         { status: 401 }
       );
     }
