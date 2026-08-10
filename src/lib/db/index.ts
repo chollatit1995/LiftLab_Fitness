@@ -19,25 +19,15 @@ export async function isDatabaseEmpty(sql: ReturnType<typeof import("postgres")>
 }
 
 export async function loadAppData(sql: ReturnType<typeof import("postgres")>): Promise<AppData> {
-  const [
-    staff,
-    classes,
-    packages,
-    promotions,
-    members,
-    facilities,
-    bookings,
-    sales,
-  ] = await Promise.all([
-      sql`SELECT id, name, email, phone, role, status, joined_at FROM staff ORDER BY joined_at`,
-      sql`SELECT id, name, description, trainer_id, capacity, duration, schedule, price, status FROM fitness_classes ORDER BY name`,
-      sql`SELECT id, name, description, price, duration_days, features, status, popular FROM membership_packages ORDER BY price`,
-      sql`SELECT id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight FROM promotions ORDER BY highlight DESC, end_date`,
-      sql`SELECT id, name, email, phone, package_id, joined_at, expires_at, status FROM members ORDER BY joined_at DESC`,
-      sql`SELECT id, name, type, capacity, status FROM facilities ORDER BY name`,
-      sql`SELECT id, type, member_id, resource_id, resource_name, date, time, status, notes FROM bookings ORDER BY date DESC, time DESC`,
-      sql`SELECT id, member_id, member_name, item, amount, date, type FROM sales ORDER BY date DESC`,
-    ]);
+  // รันทีละคำสั่ง — connection pool ตั้ง max: 1 ไว้ Promise.all จะ deadlock
+  const staff = await sql`SELECT id, name, email, phone, role, status, joined_at FROM staff ORDER BY joined_at`;
+  const classes = await sql`SELECT id, name, description, trainer_id, capacity, duration, schedule, price, status FROM fitness_classes ORDER BY name`;
+  const packages = await sql`SELECT id, name, description, price, duration_days, features, status, popular FROM membership_packages ORDER BY price`;
+  const promotions = await sql`SELECT id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight FROM promotions ORDER BY highlight DESC, end_date`;
+  const members = await sql`SELECT id, name, email, phone, package_id, joined_at, expires_at, status FROM members ORDER BY joined_at DESC`;
+  const facilities = await sql`SELECT id, name, type, capacity, status FROM facilities ORDER BY name`;
+  const bookings = await sql`SELECT id, type, member_id, resource_id, resource_name, date, time, status, notes FROM bookings ORDER BY date DESC, time DESC`;
+  const sales = await sql`SELECT id, member_id, member_name, item, amount, date, type FROM sales ORDER BY date DESC`;
 
   return {
     staff: staff.map((r) => ({

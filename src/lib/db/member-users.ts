@@ -227,28 +227,25 @@ export async function loadMemberPortalData(
     if (memberRows.length === 0) return null;
     const m = memberRows[0];
 
-    const [packageRows, bookingRows, promotionRows, allPackageRows] =
-      await Promise.all([
-        sql`
-        SELECT name, price, duration_days, features
-        FROM membership_packages WHERE id = ${m.package_id as string} LIMIT 1
-      `,
-        sql`
-        SELECT id, type, resource_name, date, time, status
-        FROM bookings WHERE member_id = ${memberId}
-        ORDER BY date DESC, time DESC
-      `,
-        sql`
-        SELECT id, title, description, discount_type, discount_value,
-               package_id, code, start_date, end_date, status, highlight
-        FROM promotions WHERE status = 'active'
-        ORDER BY highlight DESC, end_date
-      `,
-        sql`
-        SELECT id, name, description, price, duration_days, features, status, popular
-        FROM membership_packages WHERE status = 'active' ORDER BY price
-      `,
-      ]);
+    const packageRows = await sql`
+      SELECT name, price, duration_days, features
+      FROM membership_packages WHERE id = ${m.package_id as string} LIMIT 1
+    `;
+    const bookingRows = await sql`
+      SELECT id, type, resource_name, date, time, status
+      FROM bookings WHERE member_id = ${memberId}
+      ORDER BY date DESC, time DESC
+    `;
+    const promotionRows = await sql`
+      SELECT id, title, description, discount_type, discount_value,
+             package_id, code, start_date, end_date, status, highlight
+      FROM promotions WHERE status = 'active'
+      ORDER BY highlight DESC, end_date
+    `;
+    const allPackageRows = await sql`
+      SELECT id, name, description, price, duration_days, features, status, popular
+      FROM membership_packages WHERE status = 'active' ORDER BY price
+    `;
 
     return {
       member: {
