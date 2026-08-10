@@ -210,6 +210,13 @@ export default function PortalPage() {
     router.refresh();
   };
 
+  const handleCancelBooking = async (bookingId: string) => {
+    const res = await fetch(`/api/portal/bookings?id=${bookingId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) load();
+  };
+
   const derived = useMemo(() => {
     if (!data) return null;
     const { member, bookings } = data;
@@ -350,6 +357,42 @@ export default function PortalPage() {
           </div>
         </section>
 
+        {/* Quick actions — จองคลาส & PT */}
+        <section className="mb-8 grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/portal/book?tab=class"
+            className="group flex items-center gap-4 rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm transition hover:border-violet-300 hover:shadow-md"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md">
+              <span className="material-symbols-outlined text-[24px]">
+                fitness_center
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-slate-900">จองคลาส</p>
+              <p className="text-xs text-slate-500">HIIT, Yoga, Spin และอื่นๆ</p>
+            </div>
+            <span className="material-symbols-outlined text-[20px] text-violet-400 transition group-hover:translate-x-0.5 group-hover:text-violet-600">
+              arrow_forward
+            </span>
+          </Link>
+          <Link
+            href="/portal/book?tab=trainer"
+            className="group flex items-center gap-4 rounded-2xl border border-brand-200/80 bg-gradient-to-br from-brand-50 to-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-emerald-500 text-white shadow-md">
+              <span className="material-symbols-outlined text-[24px]">person</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-slate-900">จองเทรนเนอร์ (PT)</p>
+              <p className="text-xs text-slate-500">Personal Training 1-on-1</p>
+            </div>
+            <span className="material-symbols-outlined text-[20px] text-brand-400 transition group-hover:translate-x-0.5 group-hover:text-brand-600">
+              arrow_forward
+            </span>
+          </Link>
+        </section>
+
         {/* Membership hero card */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-white/80 bg-white shadow-xl shadow-slate-200/60">
           <div className="relative overflow-hidden bg-gradient-to-br from-brand-800 via-brand-600 to-emerald-500 px-6 py-7 sm:px-8 sm:py-8">
@@ -479,27 +522,35 @@ export default function PortalPage() {
                   {upcoming.map((booking) => (
                     <div
                       key={booking.id}
-                      className="group flex items-center gap-4 rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition hover:border-brand-200 hover:bg-brand-50/30 hover:shadow-sm"
+                      className="group rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition hover:border-brand-200 hover:bg-brand-50/30 hover:shadow-sm"
                     >
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-emerald-500 text-white shadow-md shadow-brand-500/20">
-                        <span className="material-symbols-outlined text-[22px]">
-                          {typeIcons[booking.type] ?? "event"}
-                        </span>
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-emerald-500 text-white shadow-md shadow-brand-500/20">
+                          <span className="material-symbols-outlined text-[22px]">
+                            {typeIcons[booking.type] ?? "event"}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-900">
+                            {booking.resourceName}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {typeLabels[booking.type] ?? booking.type}
+                          </p>
+                        </div>
+                        <div className="shrink-0 rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-slate-100">
+                          <p className="text-sm font-semibold text-slate-800">
+                            {formatDate(booking.date)}
+                          </p>
+                          <p className="text-xs text-brand-600">{booking.time}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-slate-900">
-                          {booking.resourceName}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {typeLabels[booking.type] ?? booking.type}
-                        </p>
-                      </div>
-                      <div className="shrink-0 rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-slate-100">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {formatDate(booking.date)}
-                        </p>
-                        <p className="text-xs text-brand-600">{booking.time}</p>
-                      </div>
+                      <button
+                        onClick={() => handleCancelBooking(booking.id)}
+                        className="mt-3 w-full rounded-lg border border-red-200 bg-white py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                      >
+                        ยกเลิกการจอง
+                      </button>
                     </div>
                   ))}
                 </div>
