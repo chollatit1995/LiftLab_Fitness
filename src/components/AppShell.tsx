@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
 
@@ -39,6 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const expiredSyncRef = useRef(false);
 
   const isBareLayout =
     BARE_LAYOUT_PATHS.includes(pathname) ||
@@ -46,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const loadSession = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me");
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
       const data = await res.json();
       setUser(data.user);
       setExpiresAt(data.user ? (data.expiresAt ?? null) : null);
@@ -101,38 +102,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       return;
     }
 
-    let redirecting = false;
-
-    const tick = async () => {
+    const updateCountdown = () => {
       const remaining = expiresAt - Math.floor(Date.now() / 1000);
       setSecondsLeft(remaining);
-      if (remaining > 0) return;
-      if (redirecting) return;
-      redirecting = true;
-
-      // ยืนยันกับเซิร์ฟเวอร์ก่อน — cookie อาจถูกต่ออายุแล้วแต่ client ยังใช้ exp เก่า
-      try {
-        const res = await fetch("/api/auth/me");
-        const data = await res.json();
-        if (data.user && data.expiresAt) {
-          const stillLeft = data.expiresAt - Math.floor(Date.now() / 1000);
-          if (stillLeft > 0) {
-            setExpiresAt(data.expiresAt);
-            redirecting = false;
-            return;
-          }
-        }
-      } catch {
-        // session หมดจริง — ไป login
-      }
-
-      window.location.href = "/login";
     };
 
-    void tick();
-    const timer = setInterval(() => void tick(), 30_000);
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 30_000);
     return () => clearInterval(timer);
   }, [expiresAt, user]);
+
+  /** session ใกล้หมด — ลองดึง exp ใหม่จากเซิร์ฟเวอร์ครั้งเดียว (middleware อาจต่ออายุ cookie แล้ว) */
+  useEffect(() => {
+    if (secondsLeft === null || secondsLeft > 0) {
+      expiredSyncRef.current = false;
+      return;
+    }
+    if (!user || expiredSyncRef.current) return;
+    expiredSyncRef.current = true;
+    loadSession();
+  }, [secondsLeft, user, loadSession]);
 
   const navItems = useMemo(
     () => (user ? navItemsForRole(user.role) : []),
@@ -145,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const handleExtendSession = async () => {
-    await fetch("/api/auth/me");
+    await fetch("/api/auth/me", { cache: "no-store" });
     await loadSession();
   };
 
