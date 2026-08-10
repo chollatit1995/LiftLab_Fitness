@@ -19,7 +19,7 @@ export function BrandLogo({
       alt="LiftLab Fitness"
       width={size}
       height={size}
-      className={`rounded-full object-cover shadow-sm ring-1 ring-black/10 ${className}`}
+      className={`rounded-full object-contain ${className}`}
       priority={priority}
     />
   );
