@@ -59,7 +59,7 @@ export async function authenticateMember(
              mu.failed_attempts, mu.locked_until, m.name
       FROM member_users mu
       JOIN members m ON m.id = mu.member_id
-      WHERE mu.email = ${email}
+      WHERE LOWER(TRIM(mu.email)) = ${email.trim().toLowerCase()}
       LIMIT 1
     `;
 

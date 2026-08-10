@@ -40,7 +40,8 @@ export async function authenticate(
       SELECT id, email, name, role, password, must_change_password,
              failed_attempts, locked_until
       FROM app_users
-      WHERE email = ${email} AND status = 'active'
+      WHERE LOWER(TRIM(email)) = ${email.trim().toLowerCase()}
+        AND status = 'active'
       LIMIT 1
     `;
 

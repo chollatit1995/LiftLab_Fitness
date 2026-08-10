@@ -38,7 +38,7 @@ async function handlePortal(request: NextRequest, pathname: string) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.redirect(new URL("/portal/login", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (
@@ -80,6 +80,13 @@ export async function middleware(request: NextRequest) {
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     if (pathname === "/login" && session) {
       return NextResponse.redirect(new URL("/", request.url));
+    }
+    // /login รับทั้งพนักงานและสมาชิก จึงต้องเช็ค session ฝั่งสมาชิกด้วย
+    if (pathname === "/login") {
+      const memberToken = request.cookies.get(MEMBER_SESSION_COOKIE)?.value;
+      if (memberToken && (await verifyMemberSession(memberToken))) {
+        return NextResponse.redirect(new URL("/portal", request.url));
+      }
     }
     return NextResponse.next();
   }

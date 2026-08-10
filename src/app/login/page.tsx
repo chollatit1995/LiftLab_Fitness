@@ -34,7 +34,14 @@ function LoginForm() {
         return;
       }
 
-      router.push(data.mustChangePassword ? "/change-password" : redirect);
+      // สมาชิกไม่ได้ใช้เส้นทางหลังบ้าน จึงไม่รับค่า redirect ที่ติดมากับ URL
+      if (data.scope === "member") {
+        router.push(
+          data.mustChangePassword ? "/portal/change-password" : "/portal"
+        );
+      } else {
+        router.push(data.mustChangePassword ? "/change-password" : redirect);
+      }
       router.refresh();
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
@@ -118,7 +125,7 @@ function LoginForm() {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-900">เข้าสู่ระบบ</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Sign in to LiftLab Fitness Management
+              สำหรับพนักงานและสมาชิก — ระบบจะพาไปหน้าที่ถูกต้องให้อัตโนมัติ
             </p>
           </div>
 
@@ -210,7 +217,8 @@ function LoginForm() {
 
           <div className="mt-8 rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs text-slate-500">
-              บัญชีผู้ใช้ถูกจัดการผ่านฐานข้อมูล — ติดต่อ Admin หากต้องการสิทธิ์เข้าใช้งาน
+              พนักงานเข้าสู่ระบบหลังบ้าน ส่วนสมาชิกเข้าหน้าข้อมูลแพ็กเกจและการจองของตัวเอง
+              หากยังไม่มีบัญชี ติดต่อเจ้าหน้าที่ที่เคาน์เตอร์
             </p>
           </div>
         </div>
