@@ -2,6 +2,7 @@
 
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { BrandLogo } from "@/components/BrandLogo";
 import {
   ENGLISH_NAME_HINT,
   filterEnglishNameInput,
@@ -78,11 +79,7 @@ function LoginForm() {
 
         <div className="relative">
           <div className="flex items-center gap-3">
-            <img
-              src="/logo.png"
-              alt="LiftLab Fitness"
-              className="h-12 w-12 rounded-full object-cover shadow-lg ring-2 ring-white/30"
-            />
+            <BrandLogo size={48} priority className="ring-2 ring-white/30 shadow-lg" />
             <div>
               <p className="text-xl font-bold text-white">LiftLab Fitness</p>
               <p className="text-sm text-white/70">ระบบบริหารจัดการฟิตเนส</p>
@@ -124,11 +121,7 @@ function LoginForm() {
       <div className="flex w-full flex-col items-center justify-center bg-slate-50 px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <img
-              src="/logo.png"
-              alt="LiftLab Fitness"
-              className="h-11 w-11 rounded-full object-cover shadow-md ring-1 ring-slate-200"
-            />
+            <BrandLogo size={44} priority />
             <div>
               <p className="text-lg font-bold text-slate-900">LiftLab Fitness</p>
               <p className="text-xs text-slate-500">ระบบบริหารจัดการฟิตเนส</p>

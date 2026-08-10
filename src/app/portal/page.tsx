@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/Badge";
+import { BrandLogo } from "@/components/BrandLogo";
 import { daysUntil } from "@/lib/dates";
 import { formatCurrency, formatDate, statusColors } from "@/lib/store";
 import { MembershipPackage, Promotion } from "@/lib/types";
@@ -321,11 +322,7 @@ export default function PortalPage() {
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <img
-              src="/logo.png"
-              alt="LiftLab Fitness"
-              className="h-11 w-11 rounded-full object-cover shadow-md ring-1 ring-slate-200/80"
-            />
+            <BrandLogo size={44} priority />
             <div>
               <p className="text-base font-bold tracking-tight text-slate-900">
                 LiftLab Fitness
@@ -847,11 +844,7 @@ export default function PortalPage() {
       <footer className="relative border-t border-slate-200/60 bg-white/60 py-8 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl px-4 text-center sm:px-6">
           <div className="mb-2 flex items-center justify-center gap-2">
-            <img
-              src="/logo.png"
-              alt="LiftLab Fitness"
-              className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
-            />
+            <BrandLogo size={32} />
             <span className="text-sm font-semibold text-slate-700">
               LiftLab Fitness
             </span>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
 
@@ -168,11 +169,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Logo */}
       <div className="border-b border-white/10 px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="LiftLab Fitness"
-            className="h-11 w-11 shrink-0 rounded-full object-cover shadow-lg shadow-black/30 ring-1 ring-white/20"
-          />
+          <BrandLogo size={44} priority className="shrink-0 shadow-lg shadow-black/30 ring-white/20" />
           <div className="min-w-0">
             <p className="truncate text-base font-bold text-white">LiftLab Fitness</p>
             <p className="truncate text-[11px] font-medium uppercase tracking-wider text-emerald-300/80">
@@ -397,11 +394,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <footer className="relative border-t border-slate-200/60 bg-white/60 py-6 backdrop-blur-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-center gap-1 px-4 text-center sm:px-6">
             <div className="flex items-center gap-2">
-              <img
-                src="/logo.png"
-                alt="LiftLab Fitness"
-                className="h-7 w-7 rounded-full object-cover ring-1 ring-slate-200"
-              />
+              <BrandLogo size={28} />
               <span className="text-sm font-semibold text-slate-700">LiftLab Fitness</span>
             </div>
             <p className="text-xs text-slate-400">
