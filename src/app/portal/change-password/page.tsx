@@ -65,7 +65,11 @@ export default function PortalChangePasswordPage() {
 
         <div className="card p-6">
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            รหัสผ่านปัจจุบันเป็นรหัสที่พนักงานตั้งให้ กรุณาเปลี่ยนเป็นรหัสของคุณเองก่อนใช้งาน
+            <p className="font-medium">เข้าสู่ระบบสำเร็จแล้ว</p>
+            <p className="mt-1">
+              เหลืออีกขั้นตอนเดียว — กรอกรหัสที่ได้รับจากพนักงานอีกครั้ง
+              แล้วตั้งรหัสใหม่เป็นของคุณเอง จากนั้นจะเข้าหน้าสมาชิกได้ทันที
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">

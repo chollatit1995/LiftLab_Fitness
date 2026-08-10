@@ -31,7 +31,9 @@ export default function PortalLoginPage() {
         return;
       }
 
-      router.push("/portal");
+      router.push(
+        data.member?.mustChangePassword ? "/portal/change-password" : "/portal"
+      );
       router.refresh();
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
