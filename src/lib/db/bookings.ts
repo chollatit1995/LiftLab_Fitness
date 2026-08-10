@@ -122,6 +122,9 @@ export async function createMemberBooking(input: {
     if (expiresAt && expiresAt < todayISO()) {
       return { ok: false, error: "แพ็กเกจหมดอายุแล้ว กรุณาต่ออายุก่อนจอง" };
     }
+    if (expiresAt && input.date > expiresAt) {
+      return { ok: false, error: "ไม่สามารถจองเกินวันหมดอายุแพ็กเกจ" };
+    }
     if (input.date < todayISO()) {
       return { ok: false, error: "ไม่สามารถจองวันที่ผ่านมาแล้ว" };
     }

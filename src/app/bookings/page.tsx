@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { useData } from "@/lib/data-context";
 import {
   bookingTypeMeta,
+  BOOKING_HORIZON_DAYS,
   classSlotAvailability,
   dateCardMonth,
   dayNumber,
@@ -50,7 +51,7 @@ export default function BookingsPage() {
   const [memberId, setMemberId] = useState("");
   const [notes, setNotes] = useState("");
 
-  const dates = useMemo(() => upcomingDates(14), []);
+  const dates = useMemo(() => upcomingDates(BOOKING_HORIZON_DAYS), []);
   const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
   const today = todayISO();
 

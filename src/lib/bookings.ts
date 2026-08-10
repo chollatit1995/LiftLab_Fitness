@@ -35,8 +35,14 @@ export function classTimeSlots(fitnessClass: Pick<FitnessClass, "schedule">): st
   return parsed.length > 0 ? parsed : DEFAULT_CLASS_SLOTS;
 }
 
+/** จองล่วงหน้าได้กี่วัน (วันนี้รวมอยู่ด้วย) */
+export const BOOKING_HORIZON_DAYS = 60;
+
 /** วันที่เลือกได้สำหรับจอง (เริ่มจากวันนี้) */
-export function upcomingDates(count = 14, from = todayISO()): string[] {
+export function upcomingDates(
+  count = BOOKING_HORIZON_DAYS,
+  from = todayISO()
+): string[] {
   const start = new Date(from + "T12:00:00");
   const dates: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -45,6 +51,17 @@ export function upcomingDates(count = 14, from = todayISO()): string[] {
     dates.push(d.toISOString().slice(0, 10));
   }
   return dates;
+}
+
+/** ตัดวันที่ให้ไม่เกินวันหมดอายุแพ็กเกจ (ถ้ามี) */
+export function bookableDates(
+  expiresAt?: string | null,
+  count = BOOKING_HORIZON_DAYS
+): string[] {
+  const dates = upcomingDates(count);
+  if (!expiresAt) return dates;
+  const max = expiresAt.slice(0, 10);
+  return dates.filter((d) => d <= max);
 }
 
 export function weekdayLabel(dateStr: string): string {

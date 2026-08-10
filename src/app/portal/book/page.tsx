@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   bookingTypeMeta,
+  bookableDates,
   classSlotAvailability,
   dateCardMonth,
   groupDatesByMonth,
@@ -13,7 +14,6 @@ import {
   classTimeSlots,
   dayNumber,
   TRAINER_TIME_SLOTS,
-  upcomingDates,
   weekdayLabel,
 } from "@/lib/bookings";
 import { formatCurrency, formatDate } from "@/lib/store";
@@ -58,7 +58,10 @@ export default function PortalBookPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const dates = useMemo(() => upcomingDates(14), []);
+  const dates = useMemo(
+    () => bookableDates(memberInfo?.expiresAt),
+    [memberInfo?.expiresAt]
+  );
   const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
 
   const load = useCallback(async () => {
@@ -438,11 +441,12 @@ export default function PortalBookPage() {
             <div>
               <div className="mb-3 flex items-end justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-700">เลือกวันที่</p>
-                {selectedDate && (
-                  <p className="text-xs font-medium text-brand-700">
-                    {formatDate(selectedDate)}
-                  </p>
-                )}
+                <p className="text-xs text-slate-500">
+                  {dates.length} วันให้เลือก
+                  {memberInfo?.expiresAt && (
+                    <> · ถึง {formatDate(memberInfo.expiresAt)}</>
+                  )}
+                </p>
               </div>
               <div className="space-y-4">
                 {dateGroups.map((group) => (
