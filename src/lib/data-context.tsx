@@ -9,6 +9,7 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { AppData } from "./types";
 import { initialData, loadData, saveData, withDefaults } from "./store";
 
@@ -55,29 +56,47 @@ async function saveToApi(data: AppData): Promise<boolean> {
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [data, setData] = useState<AppData>(initialData);
   const [hydrated, setHydrated] = useState(false);
   const [usingDatabase, setUsingDatabase] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** มีการแก้ไขที่ยังบันทึกลงฐานข้อมูลไม่สำเร็จหรือยัง */
+  const unsavedRef = useRef(false);
+
+  const loadFromApi = useCallback(async () => {
+    const apiData = await fetchFromApi();
+    if (!apiData) return false;
+    setData(apiData);
+    setUsingDatabase(true);
+    return true;
+  }, []);
 
   useEffect(() => {
-    fetchFromApi()
-      .then((apiData) => {
-        if (apiData) {
-          setData(apiData);
-          setUsingDatabase(true);
-        } else {
-          setData(loadData());
-        }
+    loadFromApi()
+      .then((ok) => {
+        if (!ok) setData(loadData());
       })
       .finally(() => setHydrated(true));
-  }, []);
+  }, [loadFromApi]);
+
+  /**
+   * รอบแรกมักเกิดที่หน้า login ซึ่งยังไม่มี session ทำให้ /api/data ตอบ 401
+   * จึงต้องลองใหม่เมื่อเปลี่ยนหน้า ไม่งั้นจะใช้ข้อมูลในเบราว์เซอร์ไปทั้ง session
+   * แล้วเขียนทับฐานข้อมูลตอนบันทึก แต่ถ้ามีของที่ยังบันทึกไม่สำเร็จ ห้ามดึงมาทับ
+   */
+  useEffect(() => {
+    if (!hydrated || usingDatabase || unsavedRef.current) return;
+    loadFromApi();
+  }, [pathname, hydrated, usingDatabase, loadFromApi]);
 
   const persist = useCallback((next: AppData) => {
     saveData(next);
+    unsavedRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       const saved = await saveToApi(next);
+      unsavedRef.current = !saved;
       setUsingDatabase(saved);
     }, 400);
   }, []);

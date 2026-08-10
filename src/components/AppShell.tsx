@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
+import { useData } from "@/lib/data-context";
 
 interface User {
   email: string;
@@ -34,6 +35,7 @@ function isActivePath(pathname: string, href: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { hydrated: dataHydrated, usingDatabase } = useData();
   const [user, setUser] = useState<User | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -119,6 +121,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     secondsLeft !== null &&
     secondsLeft > 0 &&
     secondsLeft <= EXPIRY_WARNING_SECONDS;
+
+  // เงียบไว้ตอนยังโหลดไม่เสร็จ ไม่งั้นแถบจะกระพริบทุกครั้งที่เปิดหน้า
+  const showOfflineWarning = dataHydrated && !usingDatabase;
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -264,6 +269,29 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           )}
         </header>
+
+        {showOfflineWarning && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2.5 sm:px-6">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 text-sm text-red-800">
+              <span className="material-symbols-outlined text-[18px]">
+                cloud_off
+              </span>
+              <span>
+                <strong className="font-semibold">
+                  ยังไม่ได้เชื่อมกับฐานข้อมูล
+                </strong>{" "}
+                — ตอนนี้ใช้ข้อมูลที่เก็บไว้ในเบราว์เซอร์ ถ้าแก้ไขอะไรตอนนี้
+                ข้อมูลจริงในฐานข้อมูลอาจถูกเขียนทับ กรุณาโหลดหน้าใหม่ก่อน
+              </span>
+              <button
+                onClick={() => window.location.reload()}
+                className="ml-auto rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100"
+              >
+                โหลดใหม่
+              </button>
+            </div>
+          </div>
+        )}
 
         {showExpiryWarning && (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 sm:px-6">
