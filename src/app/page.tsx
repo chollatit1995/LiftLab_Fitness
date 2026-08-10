@@ -23,6 +23,13 @@ function greetingFor(hour: number): string {
   return "สวัสดีตอนเย็น";
 }
 
+const quickActionStyles: Record<string, { gradient: string; border: string }> = {
+  person_add: { gradient: "from-brand-600 to-emerald-500", border: "hover:border-brand-300" },
+  event_available: { gradient: "from-sky-500 to-blue-600", border: "hover:border-sky-300" },
+  fitness_center: { gradient: "from-violet-500 to-purple-600", border: "hover:border-violet-300" },
+  group_add: { gradient: "from-orange-500 to-amber-500", border: "hover:border-orange-300" },
+};
+
 export default function DashboardPage() {
   const { data, hydrated } = useData();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
@@ -67,7 +74,7 @@ export default function DashboardPage() {
   }, [data]);
 
   const alerts = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const expiringSoon = data.members.filter((m) => {
       if (m.status !== "active") return false;
       const left = daysUntil(m.expiresAt, today);
@@ -93,100 +100,119 @@ export default function DashboardPage() {
     .slice(0, 5);
 
   const quickActions = [
-    {
-      href: "/members",
-      icon: "person_add",
-      label: "เพิ่มสมาชิก",
-      visible: true,
-    },
-    {
-      href: "/bookings",
-      icon: "event_available",
-      label: "สร้างการจอง",
-      visible: true,
-    },
-    {
-      href: "/classes",
-      icon: "fitness_center",
-      label: "จัดการคลาส",
-      visible: user ? can(user.role, "classes.edit") : false,
-    },
-    {
-      href: "/staff",
-      icon: "group_add",
-      label: "จัดการพนักงาน",
-      visible: user ? can(user.role, "staff.manage") : false,
-    },
-  ].filter((action) => action.visible);
+    { href: "/members", icon: "person_add", label: "เพิ่มสมาชิก", sub: "Members", visible: true },
+    { href: "/bookings", icon: "event_available", label: "สร้างการจอง", sub: "Bookings", visible: true },
+    { href: "/classes", icon: "fitness_center", label: "จัดการคลาส", sub: "Classes", visible: user ? can(user.role, "classes.edit") : false },
+    { href: "/staff", icon: "group_add", label: "จัดการพนักงาน", sub: "Staff", visible: user ? can(user.role, "staff.manage") : false },
+  ].filter((a) => a.visible);
 
   if (!hydrated) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+        <div className="relative">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader
-        titleTh={user ? `${greeting}, ${user.name}` : "แดชบอร์ดสรุปภาพรวม"}
-        titleEn="Dashboard Overview"
-        descriptionTh="สรุปคลาส สมาชิก และยอดขายของ LiftLab Fitness"
-        descriptionEn="Classes, members, and sales summary for LiftLab Fitness"
-      />
+      {/* Hero banner */}
+      <section className="relative mb-8 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-6 text-white shadow-xl shadow-slate-900/20 sm:p-8">
+        <div className="pointer-events-none absolute inset-0 opacity-10">
+          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white" />
+          <div className="absolute -bottom-20 -left-10 h-72 w-72 rounded-full bg-emerald-300" />
+        </div>
+        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-emerald-300/90">
+              {greeting}{user ? `, ${user.name}` : ""}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+              แดชบอร์ด LiftLab Fitness
+            </h1>
+            <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-300">
+              สรุปคลาส สมาชิก การจอง และยอดขาย — ภาพรวมทั้งหมดในที่เดียว
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-3">
+            <div className="rounded-2xl bg-white/10 px-5 py-4 text-center backdrop-blur-sm ring-1 ring-white/10">
+              <p className="text-2xl font-bold">{stats.activeMembers}</p>
+              <p className="text-xs text-slate-300">สมาชิก Active</p>
+            </div>
+            <div className="rounded-2xl bg-white/10 px-5 py-4 text-center backdrop-blur-sm ring-1 ring-white/10">
+              <p className="text-2xl font-bold">{stats.todayBookings}</p>
+              <p className="text-xs text-slate-300">จองวันนี้</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Quick actions */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {quickActions.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-          >
-            <span className="material-symbols-outlined text-[18px]">
-              {action.icon}
-            </span>
-            {action.label}
-          </Link>
-        ))}
+      <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {quickActions.map((action) => {
+          const style = quickActionStyles[action.icon] ?? quickActionStyles.person_add;
+          return (
+            <Link
+              key={action.href}
+              href={action.href}
+              className={`card-hover group flex items-center gap-4 p-4 ${style.border}`}
+            >
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${style.gradient} text-white shadow-md transition group-hover:scale-105`}
+              >
+                <span className="material-symbols-outlined text-[22px]">
+                  {action.icon}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{action.label}</p>
+                <p className="text-xs text-slate-400">{action.sub}</p>
+              </div>
+              <span className="material-symbols-outlined ml-auto text-[18px] text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500">
+                arrow_forward
+              </span>
+            </Link>
+          );
+        })}
       </div>
 
       {/* Alerts */}
       {(alerts.expiringSoon.length > 0 ||
         alerts.expired.length > 0 ||
         alerts.todayBookings.length > 0) && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <div className="mb-8 grid gap-3 sm:grid-cols-3">
           {alerts.todayBookings.length > 0 && (
             <Link
               href="/bookings"
-              className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 transition hover:bg-blue-100"
+              className="group flex items-start gap-4 rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50 to-white p-4 transition hover:shadow-md"
             >
-              <span className="material-symbols-outlined text-[20px] text-blue-600">
-                today
-              </span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500 text-white">
+                <span className="material-symbols-outlined text-[20px]">today</span>
+              </div>
               <div>
-                <p className="text-sm font-semibold text-blue-900">
-                  มีการจอง {alerts.todayBookings.length} รายการวันนี้
+                <p className="font-semibold text-sky-900">
+                  การจอง {alerts.todayBookings.length} รายการวันนี้
                 </p>
-                <p className="text-xs text-blue-700">ดูตารางการจอง</p>
+                <p className="text-xs text-sky-700">ดูตารางการจอง →</p>
               </div>
             </Link>
           )}
           {alerts.expiringSoon.length > 0 && (
             <Link
               href="/members"
-              className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 transition hover:bg-amber-100"
+              className="group flex items-start gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-white p-4 transition hover:shadow-md"
             >
-              <span className="material-symbols-outlined text-[20px] text-amber-600">
-                schedule
-              </span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+                <span className="material-symbols-outlined text-[20px]">schedule</span>
+              </div>
               <div>
-                <p className="text-sm font-semibold text-amber-900">
-                  สมาชิก {alerts.expiringSoon.length} คนใกล้หมดอายุ
+                <p className="font-semibold text-amber-900">
+                  {alerts.expiringSoon.length} คนใกล้หมดอายุ
                 </p>
                 <p className="text-xs text-amber-700">
-                  ภายใน {EXPIRING_SOON_DAYS} วัน — ติดต่อต่ออายุ
+                  ภายใน {EXPIRING_SOON_DAYS} วัน
                 </p>
               </div>
             </Link>
@@ -194,14 +220,14 @@ export default function DashboardPage() {
           {alerts.expired.length > 0 && (
             <Link
               href="/members"
-              className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 transition hover:bg-red-100"
+              className="group flex items-start gap-4 rounded-2xl border border-red-200/80 bg-gradient-to-br from-red-50 to-white p-4 transition hover:shadow-md"
             >
-              <span className="material-symbols-outlined text-[20px] text-red-500">
-                error
-              </span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white">
+                <span className="material-symbols-outlined text-[20px]">error</span>
+              </div>
               <div>
-                <p className="text-sm font-semibold text-red-900">
-                  สมาชิกหมดอายุ {alerts.expired.length} คน
+                <p className="font-semibold text-red-900">
+                  หมดอายุ {alerts.expired.length} คน
                 </p>
                 <p className="text-xs text-red-700">รอการต่ออายุ</p>
               </div>
@@ -210,7 +236,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Stats grid */}
+      {/* Stats */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon="groups"
@@ -250,128 +276,170 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent sales */}
-        <div className="card">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <div>
-              <h2 className="section-title">ยอดขายล่าสุด</h2>
-              <p className="text-xs text-slate-500">Recent Sales</p>
+        <div className="card overflow-hidden">
+          <div className="section-header">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+              </div>
+              <div>
+                <h2 className="section-title">ยอดขายล่าสุด</h2>
+                <p className="text-xs text-slate-500">Recent Sales</p>
+              </div>
             </div>
-            <p className="text-sm font-bold text-brand-600">
-              รวม {formatCurrency(stats.totalSales)}
+            <p className="rounded-full bg-brand-50 px-3 py-1 text-sm font-bold text-brand-700">
+              {formatCurrency(stats.totalSales)}
             </p>
           </div>
           <div className="divide-y divide-slate-100">
-            {recentSales.map((sale) => (
-              <div
-                key={sale.id}
-                className="flex items-center justify-between px-5 py-3.5"
-              >
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    {sale.memberName}
-                  </p>
-                  <p className="text-xs text-slate-500">{sale.item}</p>
+            {recentSales.length === 0 ? (
+              <p className="px-6 py-10 text-center text-sm text-slate-400">
+                ยังไม่มียอดขาย
+              </p>
+            ) : (
+              recentSales.map((sale) => (
+                <div
+                  key={sale.id}
+                  className="flex items-center justify-between px-5 py-3.5 transition hover:bg-slate-50/80 sm:px-6"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+                      {sale.memberName.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        {sale.memberName}
+                      </p>
+                      <p className="text-xs text-slate-500">{sale.item}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-slate-900">
+                      {formatCurrency(sale.amount)}
+                    </p>
+                    <p className="text-xs text-slate-400">{formatDate(sale.date)}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {formatCurrency(sale.amount)}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {formatDate(sale.date)}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
         {/* Upcoming bookings */}
-        <div className="card">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <div>
-              <h2 className="section-title">การจองที่กำลังจะมาถึง</h2>
-              <p className="text-xs text-slate-500">Upcoming Bookings</p>
+        <div className="card overflow-hidden">
+          <div className="section-header">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
+                <span className="material-symbols-outlined text-[20px]">event_upcoming</span>
+              </div>
+              <div>
+                <h2 className="section-title">การจองที่กำลังจะมาถึง</h2>
+                <p className="text-xs text-slate-500">Upcoming Bookings</p>
+              </div>
             </div>
             <Link
               href="/bookings"
-              className="text-xs font-medium text-brand-600 hover:text-brand-700"
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700"
             >
               ดูทั้งหมด →
             </Link>
           </div>
           <div className="divide-y divide-slate-100">
-            {upcomingBookings.map((booking) => {
-              const member = data.members.find((m) => m.id === booking.memberId);
-              return (
-                <div
-                  key={booking.id}
-                  className="flex items-center justify-between px-5 py-3.5"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                      <span className="material-symbols-outlined text-[18px]">
-                        {booking.type === "class"
-                          ? "fitness_center"
-                          : booking.type === "trainer"
-                            ? "person"
-                            : "meeting_room"}
-                      </span>
+            {upcomingBookings.length === 0 ? (
+              <p className="px-6 py-10 text-center text-sm text-slate-400">
+                ยังไม่มีการจอง
+              </p>
+            ) : (
+              upcomingBookings.map((booking) => {
+                const member = data.members.find((m) => m.id === booking.memberId);
+                const icon =
+                  booking.type === "class"
+                    ? "fitness_center"
+                    : booking.type === "trainer"
+                      ? "person"
+                      : "meeting_room";
+                return (
+                  <div
+                    key={booking.id}
+                    className="flex items-center justify-between px-5 py-3.5 transition hover:bg-slate-50/80 sm:px-6"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-emerald-500 text-white">
+                        <span className="material-symbols-outlined text-[18px]">
+                          {icon}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {booking.resourceName}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {member?.name} · {bookingTypeLabels[booking.type].th}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {booking.resourceName}
+                    <div className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-right ring-1 ring-slate-100">
+                      <p className="text-xs font-semibold text-slate-700">
+                        {formatDate(booking.date)}
                       </p>
-                      <p className="text-xs text-slate-500">
-                        {member?.name} · {bookingTypeLabels[booking.type].th}
-                      </p>
+                      <p className="text-[11px] text-brand-600">{booking.time}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-slate-700">
-                      {formatDate(booking.date)}
-                    </p>
-                    <p className="text-xs text-slate-400">{booking.time}</p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>
 
       {/* Class overview */}
-      <div className="card mt-6">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="section-title">คลาสที่เปิดสอน</h2>
-          <p className="text-xs text-slate-500">Active Classes Overview</p>
+      <div className="card mt-6 overflow-hidden">
+        <div className="section-header">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+              <span className="material-symbols-outlined text-[20px]">fitness_center</span>
+            </div>
+            <div>
+              <h2 className="section-title">คลาสที่เปิดสอน</h2>
+              <p className="text-xs text-slate-500">Active Classes Overview</p>
+            </div>
+          </div>
+          <Link
+            href="/classes"
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+          >
+            จัดการคลาส →
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                <th className="px-5 py-3 font-medium">คลาส / Class</th>
-                <th className="px-5 py-3 font-medium">เทรนเนอร์ / Trainer</th>
-                <th className="px-5 py-3 font-medium">ตาราง / Schedule</th>
-                <th className="px-5 py-3 font-medium">ที่นั่ง / Capacity</th>
-                <th className="px-5 py-3 font-medium">ราคา / Price</th>
-                <th className="px-5 py-3 font-medium">สถานะ / Status</th>
+              <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
+                <th className="px-5 py-3 font-semibold sm:px-6">คลาส</th>
+                <th className="px-5 py-3 font-semibold">เทรนเนอร์</th>
+                <th className="hidden px-5 py-3 font-semibold md:table-cell">ตาราง</th>
+                <th className="px-5 py-3 font-semibold">ที่นั่ง</th>
+                <th className="px-5 py-3 font-semibold">ราคา</th>
+                <th className="px-5 py-3 font-semibold">สถานะ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {data.classes.map((cls) => {
                 const trainer = data.staff.find((s) => s.id === cls.trainerId);
                 return (
-                  <tr key={cls.id} className="hover:bg-slate-50/50">
-                    <td className="px-5 py-3.5">
-                      <p className="font-medium text-slate-900">{cls.name}</p>
+                  <tr key={cls.id} className="transition hover:bg-slate-50/60">
+                    <td className="px-5 py-3.5 sm:px-6">
+                      <p className="font-semibold text-slate-900">{cls.name}</p>
                       <p className="text-xs text-slate-400">{cls.duration} นาที</p>
                     </td>
                     <td className="px-5 py-3.5 text-slate-600">
                       {trainer?.name ?? "—"}
                     </td>
-                    <td className="px-5 py-3.5 text-slate-600">{cls.schedule}</td>
+                    <td className="hidden px-5 py-3.5 text-slate-600 md:table-cell">
+                      {cls.schedule}
+                    </td>
                     <td className="px-5 py-3.5 text-slate-600">{cls.capacity}</td>
-                    <td className="px-5 py-3.5 font-medium text-slate-900">
+                    <td className="px-5 py-3.5 font-semibold text-slate-900">
                       {formatCurrency(cls.price)}
                     </td>
                     <td className="px-5 py-3.5">
@@ -389,38 +457,64 @@ export default function DashboardPage() {
       </div>
 
       {/* Member summary */}
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h2 className="section-title">สรุปสมาชิก</h2>
-            <p className="text-xs text-slate-500">Member Summary</p>
+      <div className="mt-8">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
+              <span className="material-symbols-outlined text-[20px]">groups</span>
+            </div>
+            <div>
+              <h2 className="section-title">สรุปสมาชิก</h2>
+              <p className="text-xs text-slate-500">Member Summary</p>
+            </div>
           </div>
           <Link
             href="/members"
-            className="text-xs font-medium text-brand-600 hover:text-brand-700"
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700"
           >
             จัดการสมาชิก →
           </Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Link href="/members" className="card p-5 text-center transition hover:bg-slate-50">
-            <p className="text-3xl font-bold text-emerald-600">
-              {data.members.filter((m) => m.status === "active").length}
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-700">สมาชิก Active</p>
-          </Link>
-          <Link href="/members" className="card p-5 text-center transition hover:bg-slate-50">
-            <p className="text-3xl font-bold text-amber-600">
-              {data.members.filter((m) => m.status === "pending").length}
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-700">รอดำเนินการ</p>
-          </Link>
-          <Link href="/members" className="card p-5 text-center transition hover:bg-slate-50">
-            <p className="text-3xl font-bold text-red-500">
-              {data.members.filter((m) => m.status === "expired").length}
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-700">หมดอายุ</p>
-          </Link>
+          {[
+            {
+              count: data.members.filter((m) => m.status === "active").length,
+              label: "สมาชิก Active",
+              color: "text-emerald-600",
+              bg: "from-emerald-50 to-white border-emerald-100",
+              icon: "check_circle",
+            },
+            {
+              count: data.members.filter((m) => m.status === "pending").length,
+              label: "รอดำเนินการ",
+              color: "text-amber-600",
+              bg: "from-amber-50 to-white border-amber-100",
+              icon: "pending",
+            },
+            {
+              count: data.members.filter((m) => m.status === "expired").length,
+              label: "หมดอายุ",
+              color: "text-red-500",
+              bg: "from-red-50 to-white border-red-100",
+              icon: "event_busy",
+            },
+          ].map((item) => (
+            <Link
+              key={item.label}
+              href="/members"
+              className={`card-hover flex items-center gap-4 border bg-gradient-to-br p-5 ${item.bg}`}
+            >
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm ${item.color}`}>
+                <span className="material-symbols-outlined text-[24px]">
+                  {item.icon}
+                </span>
+              </div>
+              <div>
+                <p className={`text-3xl font-bold ${item.color}`}>{item.count}</p>
+                <p className="text-sm font-medium text-slate-700">{item.label}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
