@@ -94,6 +94,25 @@ export interface Sale {
   amount: number;
   date: string;
   type: "membership" | "class" | "pt" | "other";
+  /** ราคาก่อนหักโปร (ถ้ามี) */
+  originalAmount?: number;
+  promotionId?: string | null;
+}
+
+export interface MembershipRenewal {
+  id: string;
+  memberId: string;
+  memberName: string;
+  packageId: string;
+  packageName: string;
+  previousExpiresAt: string;
+  newExpiresAt: string;
+  originalPrice: number;
+  finalPrice: number;
+  promotionId: string | null;
+  promotionTitle: string | null;
+  renewedAt: string;
+  renewedBy: string | null;
 }
 
 export interface AppData {
@@ -105,4 +124,5 @@ export interface AppData {
   bookings: Booking[];
   facilities: Facility[];
   sales: Sale[];
+  membershipRenewals: MembershipRenewal[];
 }

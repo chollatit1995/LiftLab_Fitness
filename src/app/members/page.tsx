@@ -14,7 +14,13 @@ import {
   statusColors,
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
-import { Member, Sale } from "@/lib/types";
+import {
+  applyDiscount,
+  bestOfferFor,
+  findPromotionByCode,
+  livePromotions,
+} from "@/lib/promotions";
+import { Member, MembershipRenewal, Sale } from "@/lib/types";
 
 type MemberStatus = Member["status"];
 type StatusFilter = "all" | MemberStatus;
@@ -53,13 +59,21 @@ const statusLabels: Record<MemberStatus, string> = {
 };
 
 export default function MembersPage() {
-  const { data, updateData, hydrated } = useData();
+  const { data, updateData, reloadData, hydrated } = useData();
   const [modalOpen, setModalOpen] = useState(false);
   const [renewModalOpen, setRenewModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [renewingId, setRenewingId] = useState<string | null>(null);
+  const [historyMemberId, setHistoryMemberId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [renewPackageId, setRenewPackageId] = useState("");
+  const [renewPromoCode, setRenewPromoCode] = useState("");
+  const [renewAutoPromo, setRenewAutoPromo] = useState(true);
+  const [renewSaving, setRenewSaving] = useState(false);
+  const [renewError, setRenewError] = useState("");
+  const [memberRenewals, setMemberRenewals] = useState<MembershipRenewal[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [role, setRole] = useState("");
@@ -195,8 +209,57 @@ export default function MembersPage() {
   const openRenew = (member: Member) => {
     setRenewingId(member.id);
     setRenewPackageId(member.packageId || activePackages[0]?.id || "");
+    setRenewPromoCode("");
+    setRenewAutoPromo(true);
+    setRenewError("");
     setRenewModalOpen(true);
   };
+
+  const openHistory = async (member: Member) => {
+    setHistoryMemberId(member.id);
+    setHistoryModalOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/members/renewals?memberId=${member.id}`);
+      if (res.ok) {
+        setMemberRenewals(await res.json());
+      } else {
+        setMemberRenewals(
+          data.membershipRenewals.filter((r) => r.memberId === member.id)
+        );
+      }
+    } catch {
+      setMemberRenewals(
+        data.membershipRenewals.filter((r) => r.memberId === member.id)
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const renewPricing = useMemo(() => {
+    const pkg = data.packages.find((p) => p.id === renewPackageId);
+    if (!pkg) return null;
+    const promos = livePromotions(data.promotions);
+    if (renewPromoCode.trim()) {
+      const promo = findPromotionByCode(promos, renewPromoCode, renewPackageId);
+      if (promo) {
+        return {
+          original: pkg.price,
+          final: applyDiscount(pkg.price, promo.discountType, promo.discountValue),
+          promo,
+        };
+      }
+      return { original: pkg.price, final: pkg.price, promo: null, invalidCode: true };
+    }
+    if (renewAutoPromo) {
+      const offer = bestOfferFor(pkg, promos);
+      if (offer) {
+        return { original: pkg.price, final: offer.price, promo: offer.promo };
+      }
+    }
+    return { original: pkg.price, final: pkg.price, promo: null };
+  }, [data.packages, data.promotions, renewPackageId, renewPromoCode, renewAutoPromo]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,16 +298,25 @@ export default function MembersPage() {
         status: form.status,
       };
 
+      const promos = livePromotions(data.promotions);
+      const offer = bestOfferFor(pkg, promos);
+      const finalPrice = offer?.price ?? pkg.price;
+      const appliedPromo = offer?.promo ?? null;
+
       const sale: Sale | null =
         form.status === "active"
           ? {
               id: generateId("sl"),
               memberId: newMember.id,
               memberName: newMember.name,
-              item: `${pkg.name} Package`,
-              amount: pkg.price,
+              item: appliedPromo
+                ? `${pkg.name} Package [${appliedPromo.title}]`
+                : `${pkg.name} Package`,
+              amount: finalPrice,
               date: form.joinedAt,
               type: "membership",
+              originalAmount: appliedPromo ? pkg.price : undefined,
+              promotionId: appliedPromo?.id ?? null,
             }
           : null;
 
@@ -260,45 +332,47 @@ export default function MembersPage() {
     setEditingId(null);
   };
 
-  const handleRenew = (e: React.FormEvent) => {
+  const handleRenew = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!renewingId) return;
     const pkg = data.packages.find((p) => p.id === renewPackageId);
     const member = data.members.find((m) => m.id === renewingId);
     if (!pkg || !member) return;
 
-    const base =
-      member.expiresAt > todayISO() ? member.expiresAt : todayISO();
-    const newExpires = addDays(base, pkg.durationDays);
-    const saleDate = todayISO();
+    if (renewPricing?.invalidCode) {
+      setRenewError("โค้ดโปรไม่ถูกต้องหรือใช้กับแพ็กเกจนี้ไม่ได้");
+      return;
+    }
 
-    const sale: Sale = {
-      id: generateId("sl"),
-      memberId: member.id,
-      memberName: member.name,
-      item: `ต่ออายุ ${pkg.name} (${pkg.durationDays} วัน)`,
-      amount: pkg.price,
-      date: saleDate,
-      type: "membership",
-    };
+    setRenewSaving(true);
+    setRenewError("");
 
-    updateData((prev) => ({
-      ...prev,
-      members: prev.members.map((m) =>
-        m.id === renewingId
-          ? {
-              ...m,
-              packageId: pkg.id,
-              expiresAt: newExpires,
-              status: "active" as const,
-            }
-          : m
-      ),
-      sales: [...prev.sales, sale],
-    }));
+    try {
+      const res = await fetch("/api/members/renew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: renewingId,
+          packageId: renewPackageId,
+          promoCode: renewPromoCode.trim() || null,
+          autoPromo: renewAutoPromo && !renewPromoCode.trim(),
+        }),
+      });
+      const json = await res.json();
 
-    setRenewModalOpen(false);
-    setRenewingId(null);
+      if (!res.ok) {
+        setRenewError(json.error || "ต่ออายุไม่สำเร็จ");
+        return;
+      }
+
+      await reloadData();
+      setRenewModalOpen(false);
+      setRenewingId(null);
+    } catch {
+      setRenewError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setRenewSaving(false);
+    }
   };
 
   const deleteMember = async (id: string) => {
@@ -323,6 +397,7 @@ export default function MembersPage() {
       members: prev.members.filter((m) => m.id !== id),
       sales: prev.sales.filter((s) => s.memberId !== id),
       bookings: prev.bookings.filter((b) => b.memberId !== id),
+      membershipRenewals: prev.membershipRenewals.filter((r) => r.memberId !== id),
     }));
 
     loadPortalAccounts();
@@ -338,6 +413,7 @@ export default function MembersPage() {
 
   const renewingMember = data.members.find((m) => m.id === renewingId);
   const renewPkg = data.packages.find((p) => p.id === renewPackageId);
+  const historyMember = data.members.find((m) => m.id === historyMemberId);
 
   return (
     <div>
@@ -492,6 +568,16 @@ export default function MembersPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openHistory(member)}
+                            title="ประวัติต่ออายุ"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-violet-50 hover:text-violet-600"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              history
+                            </span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => openRenew(member)}
@@ -814,23 +900,77 @@ export default function MembersPage() {
                 ))}
               </select>
             </div>
-            {renewPkg && (
-              <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                วันหมดอายุใหม่จะเป็น{" "}
-                {formatDate(
-                  addDays(
-                    renewingMember.expiresAt > todayISO()
-                      ? renewingMember.expiresAt
-                      : todayISO(),
-                    renewPkg.durationDays
-                  )
-                )}{" "}
-                และบันทึกยอดขาย {formatCurrency(renewPkg.price)}
+            {renewPkg && renewPricing && (
+              <div className="space-y-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <p>
+                  วันหมดอายุใหม่:{" "}
+                  <strong>
+                    {formatDate(
+                      addDays(
+                        renewingMember.expiresAt > todayISO()
+                          ? renewingMember.expiresAt
+                          : todayISO(),
+                        renewPkg.durationDays
+                      )
+                    )}
+                  </strong>
+                </p>
+                <div className="flex items-baseline gap-2">
+                  {renewPricing.promo ? (
+                    <>
+                      <span className="text-lg font-bold">
+                        {formatCurrency(renewPricing.final)}
+                      </span>
+                      <span className="text-sm line-through opacity-70">
+                        {formatCurrency(renewPricing.original)}
+                      </span>
+                      <span className="rounded-full bg-emerald-200/80 px-2 py-0.5 text-xs font-medium">
+                        {renewPricing.promo.title}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-lg font-bold">
+                      {formatCurrency(renewPricing.final)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="label-field">โค้ดโปร (ถ้ามี)</label>
+              <input
+                className="input-field"
+                value={renewPromoCode}
+                onChange={(e) => {
+                  setRenewPromoCode(e.target.value);
+                  if (e.target.value.trim()) setRenewAutoPromo(false);
+                }}
+                placeholder="เช่น NEW20, FRIEND500"
+              />
+            </div>
+            {!renewPromoCode.trim() && (
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={renewAutoPromo}
+                  onChange={(e) => setRenewAutoPromo(e.target.checked)}
+                  className="rounded border-slate-300 text-brand-600"
+                />
+                ใช้โปรที่ดีที่สุดอัตโนมัติ
+              </label>
+            )}
+            {renewError && (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                {renewError}
               </p>
             )}
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="btn-primary flex-1">
-                ยืนยันต่ออายุ
+              <button
+                type="submit"
+                className="btn-primary flex-1"
+                disabled={renewSaving}
+              >
+                {renewSaving ? "กำลังบันทึก..." : "ยืนยันต่ออายุ"}
               </button>
               <button
                 type="button"
@@ -841,6 +981,69 @@ export default function MembersPage() {
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        title="ประวัติการต่ออายุ"
+        subtitle={historyMember?.name ?? "Renewal History"}
+        wide
+      >
+        {historyLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+          </div>
+        ) : memberRenewals.length === 0 ? (
+          <p className="py-10 text-center text-sm text-slate-500">
+            ยังไม่มีประวัติการต่ออายุ
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {memberRenewals.map((r) => (
+              <div
+                key={r.id}
+                className="rounded-xl border border-slate-100 bg-slate-50/50 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">{r.packageName}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatDate(r.renewedAt)}
+                      {r.renewedBy && ` · โดย ${r.renewedBy}`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {r.finalPrice < r.originalPrice ? (
+                      <>
+                        <p className="font-bold text-rose-600">
+                          {formatCurrency(r.finalPrice)}
+                        </p>
+                        <p className="text-xs text-slate-400 line-through">
+                          {formatCurrency(r.originalPrice)}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="font-bold text-slate-900">
+                        {formatCurrency(r.finalPrice)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-lg bg-white px-2 py-1 text-slate-600 ring-1 ring-slate-200">
+                    {formatDate(r.previousExpiresAt)} → {formatDate(r.newExpiresAt)}
+                  </span>
+                  {r.promotionTitle && (
+                    <span className="rounded-lg bg-rose-50 px-2 py-1 text-rose-700">
+                      {r.promotionTitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </Modal>
     </div>

@@ -101,3 +101,21 @@ export function daysLeft(promo: Promotion, today: string = todayISO()): number {
   const now = new Date(today + "T00:00:00").getTime();
   return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
 }
+
+/** ค้นหาโปรจากโค้ด — ใช้ได้กับแพ็กเกจที่กำหนด (ไม่รวม gift) */
+export function findPromotionByCode(
+  promotions: Promotion[],
+  code: string,
+  packageId: string
+): Promotion | null {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+  return (
+    promotions.find(
+      (p) =>
+        p.code?.trim().toUpperCase() === normalized &&
+        (p.packageId === null || p.packageId === packageId) &&
+        p.discountType !== "gift"
+    ) ?? null
+  );
+}

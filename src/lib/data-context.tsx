@@ -17,6 +17,7 @@ interface DataContextValue {
   data: AppData;
   updateData: (updater: (prev: AppData) => AppData) => void;
   resetData: () => void;
+  reloadData: () => Promise<void>;
   hydrated: boolean;
   usingDatabase: boolean;
 }
@@ -112,6 +113,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [persist]
   );
 
+  const reloadData = useCallback(async () => {
+    const apiData = await fetchFromApi();
+    if (apiData) {
+      setData(apiData);
+      saveData(apiData);
+      setUsingDatabase(true);
+      unsavedRef.current = false;
+    }
+  }, []);
+
   const resetData = useCallback(() => {
     setData(initialData);
     persist(initialData);
@@ -119,7 +130,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   return (
     <DataContext.Provider
-      value={{ data, updateData, resetData, hydrated, usingDatabase }}
+      value={{ data, updateData, resetData, reloadData, hydrated, usingDatabase }}
     >
       {children}
     </DataContext.Provider>

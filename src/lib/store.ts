@@ -375,11 +375,16 @@ export const initialData: AppData = {
       type: "pt",
     },
   ],
+  membershipRenewals: [],
 };
 
 /** ข้อมูลที่บันทึกไว้ก่อนมีฟีเจอร์ใหม่จะไม่มีคีย์นั้น เติมค่าว่างกันหน้าเว็บพัง */
 export function withDefaults(data: AppData): AppData {
-  return { ...data, promotions: data.promotions ?? [] };
+  return {
+    ...data,
+    promotions: data.promotions ?? [],
+    membershipRenewals: data.membershipRenewals ?? [],
+  };
 }
 
 export function loadData(): AppData {
