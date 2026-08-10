@@ -20,11 +20,13 @@ export default function DashboardPage() {
     const activeMembers = data.members.filter((m) => m.status === "active").length;
     const activeClasses = data.classes.filter((c) => c.status === "active").length;
     const totalSales = data.sales.reduce((sum, s) => sum + s.amount, 0);
+    const today = new Date().toISOString().split("T")[0];
+    const monthPrefix = today.slice(0, 7);
     const todayBookings = data.bookings.filter(
-      (b) => b.date === "2025-08-09" && b.status === "confirmed"
+      (b) => b.date === today && b.status === "confirmed"
     ).length;
     const monthlySales = data.sales
-      .filter((s) => s.date.startsWith("2025-08"))
+      .filter((s) => s.date.startsWith(monthPrefix))
       .reduce((sum, s) => sum + s.amount, 0);
 
     return { activeMembers, activeClasses, totalSales, todayBookings, monthlySales };
@@ -232,24 +234,38 @@ export default function DashboardPage() {
       </div>
 
       {/* Member summary */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div className="card p-5 text-center">
-          <p className="text-3xl font-bold text-emerald-600">
-            {data.members.filter((m) => m.status === "active").length}
-          </p>
-          <p className="mt-1 text-sm font-medium text-slate-700">สมาชิก Active</p>
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="section-title">สรุปสมาชิก</h2>
+            <p className="text-xs text-slate-500">Member Summary</p>
+          </div>
+          <Link
+            href="/members"
+            className="text-xs font-medium text-brand-600 hover:text-brand-700"
+          >
+            จัดการสมาชิก →
+          </Link>
         </div>
-        <div className="card p-5 text-center">
-          <p className="text-3xl font-bold text-amber-600">
-            {data.members.filter((m) => m.status === "pending").length}
-          </p>
-          <p className="mt-1 text-sm font-medium text-slate-700">รอดำเนินการ</p>
-        </div>
-        <div className="card p-5 text-center">
-          <p className="text-3xl font-bold text-red-500">
-            {data.members.filter((m) => m.status === "expired").length}
-          </p>
-          <p className="mt-1 text-sm font-medium text-slate-700">หมดอายุ</p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Link href="/members" className="card p-5 text-center transition hover:bg-slate-50">
+            <p className="text-3xl font-bold text-emerald-600">
+              {data.members.filter((m) => m.status === "active").length}
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-700">สมาชิก Active</p>
+          </Link>
+          <Link href="/members" className="card p-5 text-center transition hover:bg-slate-50">
+            <p className="text-3xl font-bold text-amber-600">
+              {data.members.filter((m) => m.status === "pending").length}
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-700">รอดำเนินการ</p>
+          </Link>
+          <Link href="/members" className="card p-5 text-center transition hover:bg-slate-50">
+            <p className="text-3xl font-bold text-red-500">
+              {data.members.filter((m) => m.status === "expired").length}
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-700">หมดอายุ</p>
+          </Link>
         </div>
       </div>
     </div>

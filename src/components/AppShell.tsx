@@ -24,6 +24,12 @@ const navItems = [
     labelEn: "Bookings",
   },
   {
+    href: "/members",
+    icon: "card_membership",
+    labelTh: "จัดการสมาชิก",
+    labelEn: "Members",
+  },
+  {
     href: "/users",
     icon: "admin_panel_settings",
     labelTh: "ผู้ใช้งานระบบ",
