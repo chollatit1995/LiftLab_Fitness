@@ -1,4 +1,4 @@
-import { MembershipRenewal, Sale } from "../types";
+import { MembershipRenewal, MembershipPackage, Promotion, Sale } from "../types";
 import { toISODate, todayISO } from "../dates";
 import {
   applyDiscount,
@@ -6,7 +6,7 @@ import {
   findPromotionByCode,
   livePromotions,
 } from "../promotions";
-import { MembershipPackage, Promotion } from "../types";
+import { sessionsFromPackage } from "../sessions";
 import { withDb } from "./client";
 
 function addDays(dateStr: string, days: number): string {
@@ -50,7 +50,7 @@ export async function renewMemberInDb(
 
     const member = memberRows[0];
     const packageRows = await sql`
-      SELECT id, name, description, price, duration_days, features, status, popular
+      SELECT id, name, description, price, duration_days, session_limit, features, status, popular
       FROM membership_packages WHERE id = ${input.packageId} AND status = 'active'
       LIMIT 1
     `;
@@ -63,6 +63,8 @@ export async function renewMemberInDb(
       description: pkgRow.description as string,
       price: Number(pkgRow.price),
       durationDays: Number(pkgRow.duration_days),
+      sessionLimit:
+        pkgRow.session_limit != null ? Number(pkgRow.session_limit) : null,
       features: pkgRow.features as string[],
       status: pkgRow.status as MembershipPackage["status"],
       popular: Boolean(pkgRow.popular),
@@ -119,6 +121,7 @@ export async function renewMemberInDb(
     const newExpiresAt = addDays(base, pkg.durationDays);
     const renewedAt = todayISO();
     const memberName = member.name as string;
+    const { sessionsTotal, sessionsUsed } = sessionsFromPackage(pkg.sessionLimit);
 
     const renewalId = generateId("rn");
     const saleId = generateId("sl");
@@ -133,7 +136,9 @@ export async function renewMemberInDb(
         UPDATE members
         SET package_id = ${pkg.id},
             expires_at = ${newExpiresAt},
-            status = 'active'
+            status = 'active',
+            sessions_total = ${sessionsTotal},
+            sessions_used = ${sessionsUsed}
         WHERE id = ${input.memberId}
       `;
 
@@ -196,6 +201,8 @@ export async function renewMemberInDb(
         packageId: pkg.id,
         expiresAt: newExpiresAt,
         status: "active",
+        sessionsTotal,
+        sessionsUsed,
       },
       sale,
       renewal,

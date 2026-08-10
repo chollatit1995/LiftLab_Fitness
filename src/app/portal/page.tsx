@@ -13,6 +13,7 @@ import {
   livePromotions,
   promotionsForPackage,
 } from "@/lib/promotions";
+import { hasSessionQuota, sessionsRemaining } from "@/lib/sessions";
 
 interface PortalData {
   member: {
@@ -24,11 +25,14 @@ interface PortalData {
     joinedAt: string;
     expiresAt: string;
     status: string;
+    sessionsTotal: number | null;
+    sessionsUsed: number;
   };
   package: {
     name: string;
     price: number;
     durationDays: number;
+    sessionLimit: number | null;
     features: string[];
   } | null;
   bookings: {
@@ -290,6 +294,15 @@ export default function PortalPage() {
     history,
   } = derived;
 
+  const sessionTotal = member.sessionsTotal;
+  const sessionUsed = member.sessionsUsed ?? 0;
+  const sessionLeft = sessionsRemaining(sessionTotal, sessionUsed);
+  const showSessions = hasSessionQuota(sessionTotal);
+  const sessionPercent =
+    showSessions && sessionTotal
+      ? Math.min(100, Math.round((sessionUsed / sessionTotal) * 100))
+      : 0;
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-emerald-50/25 to-slate-100">
       <link
@@ -412,7 +425,26 @@ export default function PortalPage() {
                   <p className="mt-1.5 text-sm text-white/80">
                     {formatCurrency(data.package.price)} · {data.package.durationDays}{" "}
                     วัน
+                    {showSessions && sessionTotal != null && (
+                      <> · {sessionTotal} ครั้ง</>
+                    )}
                   </p>
+                )}
+                {showSessions && sessionTotal != null && (
+                  <div className="mt-4 max-w-xs">
+                    <div className="mb-1.5 flex items-center justify-between text-xs text-white/80">
+                      <span>ใช้ไป {sessionUsed} / {sessionTotal} ครั้ง</span>
+                      <span className="font-semibold text-white">
+                        เหลือ {sessionLeft} ครั้ง
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/20">
+                      <div
+                        className="h-full rounded-full bg-emerald-300 transition-all duration-700"
+                        style={{ width: `${sessionPercent}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
                 <div className="mt-4">
                   <Badge

@@ -123,4 +123,7 @@ export const SCHEMA_STATEMENTS = [
   )`,
   `ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_amount NUMERIC`,
   `ALTER TABLE sales ADD COLUMN IF NOT EXISTS promotion_id TEXT`,
+  `ALTER TABLE membership_packages ADD COLUMN IF NOT EXISTS session_limit INTEGER`,
+  `ALTER TABLE members ADD COLUMN IF NOT EXISTS sessions_total INTEGER`,
+  `ALTER TABLE members ADD COLUMN IF NOT EXISTS sessions_used INTEGER NOT NULL DEFAULT 0`,
 ];

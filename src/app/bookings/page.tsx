@@ -23,6 +23,7 @@ import {
   formatCurrency,
 } from "@/lib/store";
 import { Booking, BookingType } from "@/lib/types";
+import { hasSessionQuota } from "@/lib/sessions";
 import { todayISO } from "@/lib/dates";
 
 type WizardStep = "type" | "resource" | "datetime" | "member" | "confirm";
@@ -160,12 +161,36 @@ export default function BookingsPage() {
   };
 
   const completeBooking = (id: string) => {
-    updateData((prev) => ({
-      ...prev,
-      bookings: prev.bookings.map((b) =>
-        b.id === id ? { ...b, status: "completed" as const } : b
-      ),
-    }));
+    updateData((prev) => {
+      const booking = prev.bookings.find((b) => b.id === id);
+      if (!booking || booking.status === "completed") {
+        return {
+          ...prev,
+          bookings: prev.bookings.map((b) =>
+            b.id === id ? { ...b, status: "completed" as const } : b
+          ),
+        };
+      }
+
+      let members = prev.members;
+      if (booking.type === "trainer") {
+        members = prev.members.map((m) => {
+          if (m.id !== booking.memberId) return m;
+          if (!hasSessionQuota(m.sessionsTotal)) return m;
+          const used = m.sessionsUsed ?? 0;
+          if (used >= (m.sessionsTotal as number)) return m;
+          return { ...m, sessionsUsed: used + 1 };
+        });
+      }
+
+      return {
+        ...prev,
+        members,
+        bookings: prev.bookings.map((b) =>
+          b.id === id ? { ...b, status: "completed" as const } : b
+        ),
+      };
+    });
   };
 
   const canProceedFromResource = !!resourceId;

@@ -24,9 +24,9 @@ export async function isDatabaseEmpty(sql: ReturnType<typeof import("postgres")>
 export async function loadAppData(sql: ReturnType<typeof import("postgres")>): Promise<AppData> {
   const staff = await sql`SELECT id, name, email, phone, role, status, joined_at FROM staff ORDER BY joined_at`;
   const classes = await sql`SELECT id, name, description, trainer_id, capacity, duration, schedule, price, status FROM fitness_classes ORDER BY name`;
-  const packages = await sql`SELECT id, name, description, price, duration_days, features, status, popular FROM membership_packages ORDER BY price`;
+  const packages = await sql`SELECT id, name, description, price, duration_days, session_limit, features, status, popular FROM membership_packages ORDER BY price`;
   const promotions = await sql`SELECT id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight FROM promotions ORDER BY highlight DESC, end_date`;
-  const members = await sql`SELECT id, name, email, phone, package_id, joined_at, expires_at, status FROM members ORDER BY joined_at DESC`;
+  const members = await sql`SELECT id, name, email, phone, package_id, joined_at, expires_at, status, sessions_total, sessions_used FROM members ORDER BY joined_at DESC`;
   const facilities = await sql`SELECT id, name, type, capacity, status FROM facilities ORDER BY name`;
   const bookings = await sql`SELECT id, type, member_id, resource_id, resource_name, date, time, status, notes FROM bookings ORDER BY date DESC, time DESC`;
   const sales = await sql`SELECT id, member_id, member_name, item, amount, date, type, original_amount, promotion_id FROM sales ORDER BY date DESC`;
@@ -71,6 +71,8 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       description: r.description as string,
       price: Number(r.price),
       durationDays: Number(r.duration_days),
+      sessionLimit:
+        r.session_limit != null ? Number(r.session_limit) : null,
       features: r.features as string[],
       status: r.status as AppData["packages"][0]["status"],
       popular: Boolean(r.popular),
@@ -97,6 +99,9 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       joinedAt: toISODate(r.joined_at),
       expiresAt: toISODate(r.expires_at),
       status: r.status as AppData["members"][0]["status"],
+      sessionsTotal:
+        r.sessions_total != null ? Number(r.sessions_total) : null,
+      sessionsUsed: Number(r.sessions_used ?? 0),
     })),
     facilities: facilities.map((r) => ({
       id: r.id as string,
@@ -196,13 +201,14 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
     );
     for (const p of data.packages) {
       await tx`
-        INSERT INTO membership_packages (id, name, description, price, duration_days, features, status, popular)
-        VALUES (${p.id}, ${p.name}, ${p.description}, ${p.price}, ${p.durationDays}, ${tx.json(p.features)}, ${p.status}, ${p.popular ?? false})
+        INSERT INTO membership_packages (id, name, description, price, duration_days, session_limit, features, status, popular)
+        VALUES (${p.id}, ${p.name}, ${p.description}, ${p.price}, ${p.durationDays}, ${p.sessionLimit ?? null}, ${tx.json(p.features)}, ${p.status}, ${p.popular ?? false})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name,
           description = EXCLUDED.description,
           price = EXCLUDED.price,
           duration_days = EXCLUDED.duration_days,
+          session_limit = EXCLUDED.session_limit,
           features = EXCLUDED.features,
           status = EXCLUDED.status,
           popular = EXCLUDED.popular
@@ -240,8 +246,8 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
     );
     for (const m of data.members) {
       await tx`
-        INSERT INTO members (id, name, email, phone, package_id, joined_at, expires_at, status)
-        VALUES (${m.id}, ${m.name}, ${m.email}, ${m.phone}, ${m.packageId}, ${m.joinedAt}, ${m.expiresAt}, ${m.status})
+        INSERT INTO members (id, name, email, phone, package_id, joined_at, expires_at, status, sessions_total, sessions_used)
+        VALUES (${m.id}, ${m.name}, ${m.email}, ${m.phone}, ${m.packageId}, ${m.joinedAt}, ${m.expiresAt}, ${m.status}, ${m.sessionsTotal ?? null}, ${m.sessionsUsed ?? 0})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name,
           email = EXCLUDED.email,
@@ -249,7 +255,9 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
           package_id = EXCLUDED.package_id,
           joined_at = EXCLUDED.joined_at,
           expires_at = EXCLUDED.expires_at,
-          status = EXCLUDED.status
+          status = EXCLUDED.status,
+          sessions_total = EXCLUDED.sessions_total,
+          sessions_used = EXCLUDED.sessions_used
       `;
     }
 

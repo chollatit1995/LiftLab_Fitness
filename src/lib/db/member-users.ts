@@ -35,11 +35,14 @@ export interface MemberPortalData {
     joinedAt: string;
     expiresAt: string;
     status: string;
+    sessionsTotal: number | null;
+    sessionsUsed: number;
   };
   package: {
     name: string;
     price: number;
     durationDays: number;
+    sessionLimit: number | null;
     features: string[];
   } | null;
   bookings: {
@@ -222,14 +225,15 @@ export async function loadMemberPortalData(
 ): Promise<MemberPortalData | null> {
   return withDb(async (sql) => {
     const memberRows = await sql`
-      SELECT id, name, email, phone, package_id, joined_at, expires_at, status
+      SELECT id, name, email, phone, package_id, joined_at, expires_at, status,
+             sessions_total, sessions_used
       FROM members WHERE id = ${memberId} LIMIT 1
     `;
     if (memberRows.length === 0) return null;
     const m = memberRows[0];
 
     const packageRows = await sql`
-      SELECT name, price, duration_days, features
+      SELECT name, price, duration_days, session_limit, features
       FROM membership_packages WHERE id = ${m.package_id as string} LIMIT 1
     `;
     const bookingRows = await sql`
@@ -244,7 +248,7 @@ export async function loadMemberPortalData(
       ORDER BY highlight DESC, end_date
     `;
     const allPackageRows = await sql`
-      SELECT id, name, description, price, duration_days, features, status, popular
+      SELECT id, name, description, price, duration_days, session_limit, features, status, popular
       FROM membership_packages WHERE status = 'active' ORDER BY price
     `;
 
@@ -258,6 +262,9 @@ export async function loadMemberPortalData(
         joinedAt: toISODate(m.joined_at),
         expiresAt: toISODate(m.expires_at),
         status: m.status as string,
+        sessionsTotal:
+          m.sessions_total != null ? Number(m.sessions_total) : null,
+        sessionsUsed: Number(m.sessions_used ?? 0),
       },
       package:
         packageRows.length > 0
@@ -265,6 +272,10 @@ export async function loadMemberPortalData(
               name: packageRows[0].name as string,
               price: Number(packageRows[0].price),
               durationDays: Number(packageRows[0].duration_days),
+              sessionLimit:
+                packageRows[0].session_limit != null
+                  ? Number(packageRows[0].session_limit)
+                  : null,
               features: packageRows[0].features as string[],
             }
           : null,
@@ -295,6 +306,8 @@ export async function loadMemberPortalData(
         description: p.description as string,
         price: Number(p.price),
         durationDays: Number(p.duration_days),
+        sessionLimit:
+          p.session_limit != null ? Number(p.session_limit) : null,
         features: p.features as string[],
         status: p.status as MembershipPackage["status"],
         popular: Boolean(p.popular),

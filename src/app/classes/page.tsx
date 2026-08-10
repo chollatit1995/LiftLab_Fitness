@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { useData } from "@/lib/data-context";
 import { generateId, formatCurrency, statusColors } from "@/lib/store";
 import { FitnessClass, MembershipPackage } from "@/lib/types";
+import { hasSessionQuota } from "@/lib/sessions";
 
 type Tab = "classes" | "packages";
 
@@ -26,6 +27,7 @@ const emptyPackageForm = {
   description: "",
   price: 0,
   durationDays: 30,
+  sessionLimit: "" as number | "",
   features: "",
   status: "active" as "active" | "inactive",
   popular: false,
@@ -96,12 +98,22 @@ export default function ClassesPage() {
 
   const handlePackageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const sessionLimit =
+      packageForm.sessionLimit === "" || packageForm.sessionLimit === 0
+        ? null
+        : Number(packageForm.sessionLimit);
     const pkgData = {
-      ...packageForm,
+      name: packageForm.name,
+      description: packageForm.description,
+      price: packageForm.price,
+      durationDays: packageForm.durationDays,
+      sessionLimit,
       features: packageForm.features
         .split("\n")
         .map((f) => f.trim())
         .filter(Boolean),
+      status: packageForm.status,
+      popular: packageForm.popular,
     };
 
     if (editingPackageId) {
@@ -311,7 +323,11 @@ export default function ClassesPage() {
                 </span>
                 <span className="text-sm text-slate-500"> / เดือน</span>
                 <p className="mt-1 text-xs text-slate-400">
-                  {pkg.durationDays} วัน · ~฿
+                  {pkg.durationDays} วัน
+                  {hasSessionQuota(pkg.sessionLimit)
+                    ? ` · ${pkg.sessionLimit} ครั้ง`
+                    : ""}{" "}
+                  · ~฿
                   {Math.round(pkg.price / (pkg.durationDays / 30))}/เดือน
                 </p>
               </div>
@@ -344,6 +360,7 @@ export default function ClassesPage() {
                       description: pkg.description,
                       price: pkg.price,
                       durationDays: pkg.durationDays,
+                      sessionLimit: pkg.sessionLimit ?? "",
                       features: pkg.features.join("\n"),
                       status: pkg.status,
                       popular: pkg.popular ?? false,
@@ -569,6 +586,28 @@ export default function ClassesPage() {
                 min={1}
               />
             </div>
+          </div>
+          <div>
+            <label className="label-field">
+              จำนวนครั้ง PT / Session limit
+            </label>
+            <input
+              type="number"
+              className="input-field"
+              value={packageForm.sessionLimit}
+              onChange={(e) =>
+                setPackageForm({
+                  ...packageForm,
+                  sessionLimit:
+                    e.target.value === "" ? "" : Number(e.target.value),
+                })
+              }
+              min={0}
+              placeholder="ว่างไว้ = ไม่จำกัดครั้ง (แบบรายเดือน)"
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              ใส่จำนวนครั้ง เช่น 10 สำหรับแพ็กเกจ PT 10 ครั้ง / 30 วัน
+            </p>
           </div>
           <div>
             <label className="label-field">

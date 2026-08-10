@@ -1,4 +1,5 @@
 import { BookingType } from "../types";
+import { hasSessionQuota, sessionsRemaining } from "../sessions";
 import { toISODate, todayISO } from "../dates";
 import {
   classSlotAvailability,
@@ -106,7 +107,8 @@ export async function createMemberBooking(input: {
 }): Promise<CreateBookingResult> {
   return withDb(async (sql) => {
     const memberRows = await sql`
-      SELECT status, expires_at FROM members WHERE id = ${input.memberId} LIMIT 1
+      SELECT status, expires_at, sessions_total, sessions_used
+      FROM members WHERE id = ${input.memberId} LIMIT 1
     `;
     if (memberRows.length === 0) {
       return { ok: false, error: "ไม่พบข้อมูลสมาชิก" };
@@ -149,6 +151,25 @@ export async function createMemberBooking(input: {
     }
 
     if (input.type === "trainer") {
+      const sessionsTotal =
+        member.sessions_total != null ? Number(member.sessions_total) : null;
+      const sessionsUsed = Number(member.sessions_used ?? 0);
+      if (hasSessionQuota(sessionsTotal)) {
+        const trainerBookings = await sql`
+          SELECT id FROM bookings
+          WHERE member_id = ${input.memberId}
+            AND type = 'trainer'
+            AND status = 'confirmed'
+        `;
+        const remaining = sessionsRemaining(sessionsTotal, sessionsUsed);
+        if (remaining != null && trainerBookings.length >= remaining) {
+          return {
+            ok: false,
+            error: "ใช้ครั้งเทรนครบแล้ว กรุณาต่ออายุหรือติดต่อเคาน์เตอร์",
+          };
+        }
+      }
+
       if (isTrainerSlotTaken(existing, input.resourceId, input.date, input.time)) {
         return { ok: false, error: "เทรนเนอร์ไม่ว่างในช่วงเวลานี้" };
       }

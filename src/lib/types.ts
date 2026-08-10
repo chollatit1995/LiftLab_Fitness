@@ -28,6 +28,8 @@ export interface MembershipPackage {
   description: string;
   price: number;
   durationDays: number;
+  /** จำนวนครั้ง PT ที่แพ็กเกจให้ — null/0 = ไม่จำกัดครั้ง */
+  sessionLimit?: number | null;
   features: string[];
   status: "active" | "inactive";
   popular?: boolean;
@@ -62,6 +64,9 @@ export interface Member {
   joinedAt: string;
   expiresAt: string;
   status: "active" | "expired" | "pending";
+  /** quota ครั้งเทรนปัจจุบัน — null = ไม่จำกัดครั้ง */
+  sessionsTotal?: number | null;
+  sessionsUsed?: number;
 }
 
 export type BookingType = "class" | "trainer" | "facility";

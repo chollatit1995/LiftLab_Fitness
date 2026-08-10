@@ -15,6 +15,7 @@ import {
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
 import { formatPhoneInput, handlePhoneKeyDown, handlePhonePaste, phoneDigits, phoneFieldPattern, phoneFieldTitle } from "@/lib/phone";
+import { sessionsFromPackage, hasSessionQuota } from "@/lib/sessions";
 import {
   bestOfferFor,
   livePromotions,
@@ -239,6 +240,12 @@ export default function MembersPage() {
     if (!pkg) return;
 
     if (editingId) {
+      const prev = data.members.find((m) => m.id === editingId);
+      const packageChanged = prev?.packageId !== form.packageId;
+      const sessionFields = packageChanged
+        ? sessionsFromPackage(pkg.sessionLimit)
+        : {};
+
       updateData((prev) => ({
         ...prev,
         members: prev.members.map((m) => {
@@ -252,6 +259,7 @@ export default function MembersPage() {
             joinedAt: form.joinedAt,
             expiresAt: form.expiresAt,
             status: form.status,
+            ...sessionFields,
           };
         }),
         sales: prev.sales.map((s) =>
@@ -268,6 +276,7 @@ export default function MembersPage() {
         joinedAt: form.joinedAt,
         expiresAt: form.expiresAt,
         status: form.status,
+        ...sessionsFromPackage(pkg.sessionLimit),
       };
 
       const promos = livePromotions(data.promotions);
@@ -500,6 +509,9 @@ export default function MembersPage() {
                         {pkg && (
                           <p className="text-xs text-slate-400">
                             {formatCurrency(pkg.price)} · {pkg.durationDays} วัน
+                            {hasSessionQuota(member.sessionsTotal) && (
+                              <> · ใช้ {member.sessionsUsed ?? 0}/{member.sessionsTotal} ครั้ง</>
+                            )}
                           </p>
                         )}
                       </td>
@@ -874,7 +886,11 @@ export default function MembersPage() {
                 {activePackages.map((pkg) => (
                   <option key={pkg.id} value={pkg.id}>
                     {pkg.name} — {formatCurrency(pkg.price)} ({pkg.durationDays}{" "}
-                    วัน)
+                    วัน
+                    {hasSessionQuota(pkg.sessionLimit)
+                      ? ` · ${pkg.sessionLimit} ครั้ง`
+                      : ""}
+                    )
                   </option>
                 ))}
               </select>
@@ -897,6 +913,12 @@ export default function MembersPage() {
                 <p className="mt-2 text-lg font-bold">
                   {formatCurrency(renewPkg.price)}
                 </p>
+                {hasSessionQuota(renewPkg.sessionLimit) && (
+                  <p className="mt-1 text-sm">
+                    ครั้งเทรน: <strong>0 / {renewPkg.sessionLimit}</strong>{" "}
+                    (รีเซ็ตเมื่อต่ออายุ)
+                  </p>
+                )}
               </div>
             )}
             {renewError && (
