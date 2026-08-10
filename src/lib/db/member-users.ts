@@ -1,5 +1,6 @@
 import { hashPassword, isHashed, verifyPassword } from "../password";
 import { MembershipPackage, Promotion } from "../types";
+import { toISODate } from "../dates";
 import { withDb } from "./client";
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -155,7 +156,7 @@ export async function setMemberPassword(
       email: row.email as string,
       mustChangePassword: Boolean(row.must_change_password),
       lastLoginAt: row.last_login_at
-        ? String(row.last_login_at).slice(0, 10)
+        ? toISODate(row.last_login_at)
         : null,
     };
   });
@@ -172,7 +173,7 @@ export async function listMemberAccounts(): Promise<MemberAccount[]> {
       email: row.email as string,
       mustChangePassword: Boolean(row.must_change_password),
       lastLoginAt: row.last_login_at
-        ? String(row.last_login_at).slice(0, 10)
+        ? toISODate(row.last_login_at)
         : null,
     }));
   });
@@ -254,8 +255,8 @@ export async function loadMemberPortalData(
         email: m.email as string,
         phone: m.phone as string,
         packageId: m.package_id as string,
-        joinedAt: String(m.joined_at).slice(0, 10),
-        expiresAt: String(m.expires_at).slice(0, 10),
+        joinedAt: toISODate(m.joined_at),
+        expiresAt: toISODate(m.expires_at),
         status: m.status as string,
       },
       package:
@@ -271,7 +272,7 @@ export async function loadMemberPortalData(
         id: b.id as string,
         type: b.type as string,
         resourceName: b.resource_name as string,
-        date: String(b.date).slice(0, 10),
+        date: toISODate(b.date),
         time: b.time as string,
         status: b.status as string,
       })),
@@ -283,8 +284,8 @@ export async function loadMemberPortalData(
         discountValue: Number(p.discount_value),
         packageId: (p.package_id as string | null) ?? null,
         code: (p.code as string | null) ?? null,
-        startDate: String(p.start_date).slice(0, 10),
-        endDate: String(p.end_date).slice(0, 10),
+        startDate: toISODate(p.start_date),
+        endDate: toISODate(p.end_date),
         status: p.status as Promotion["status"],
         highlight: Boolean(p.highlight),
       })),

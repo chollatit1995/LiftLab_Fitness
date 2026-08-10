@@ -1,4 +1,5 @@
 import { AppData } from "./types";
+import { toISODate } from "./dates";
 
 export const STORAGE_KEY = "liftlab-fitness-data";
 
@@ -410,11 +411,13 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: string): string {
+  const iso = toISODate(date);
+  if (!iso) return "—";
   return new Intl.DateTimeFormat("th-TH", {
     day: "numeric",
     month: "short",
     year: "numeric",
-  }).format(new Date(date));
+  }).format(new Date(iso + "T12:00:00"));
 }
 
 export const roleLabels: Record<string, { th: string; en: string }> = {

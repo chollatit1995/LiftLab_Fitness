@@ -6,6 +6,7 @@ import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
 import { PasswordField } from "@/components/PasswordField";
 import { useData } from "@/lib/data-context";
+import { daysUntil, todayISO, toISODate } from "@/lib/dates";
 import {
   formatCurrency,
   formatDate,
@@ -28,19 +29,9 @@ const emptyForm = {
 };
 
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(toISODate(dateStr) + "T12:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
-}
-
-function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
-function daysUntil(dateStr: string): number {
-  const today = new Date(todayISO() + "T00:00:00");
-  const target = new Date(dateStr + "T00:00:00");
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return d.toISOString().slice(0, 10);
 }
 
 const statusLabels: Record<MemberStatus, string> = {

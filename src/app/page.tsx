@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
 import { useData } from "@/lib/data-context";
+import { daysUntil, todayISO } from "@/lib/dates";
 import {
   formatCurrency,
   formatDate,
@@ -20,12 +21,6 @@ function greetingFor(hour: number): string {
   if (hour < 12) return "สวัสดีตอนเช้า";
   if (hour < 17) return "สวัสดีตอนบ่าย";
   return "สวัสดีตอนเย็น";
-}
-
-function daysUntil(dateStr: string, today: string): number {
-  const start = new Date(today + "T00:00:00").getTime();
-  const end = new Date(dateStr + "T00:00:00").getTime();
-  return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 }
 
 export default function DashboardPage() {

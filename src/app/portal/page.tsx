@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/Badge";
+import { daysUntil } from "@/lib/dates";
 import { formatCurrency, formatDate, statusColors } from "@/lib/store";
 import { MembershipPackage, Promotion } from "@/lib/types";
 import {
@@ -62,12 +63,6 @@ const typeIcons: Record<string, string> = {
   trainer: "person",
   facility: "meeting_room",
 };
-
-function daysUntil(dateStr: string): number {
-  const today = new Date(new Date().toISOString().split("T")[0] + "T00:00:00");
-  const target = new Date(dateStr + "T00:00:00");
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
 
 export default function PortalPage() {
   const router = useRouter();
@@ -212,7 +207,9 @@ export default function PortalPage() {
                       : "text-emerald-600"
                 }`}
               >
-                {remaining < 0
+                {Number.isNaN(remaining)
+                  ? "—"
+                  : remaining < 0
                   ? "หมดอายุแล้ว"
                   : remaining === 0
                     ? "หมดอายุวันนี้"
@@ -222,7 +219,7 @@ export default function PortalPage() {
           </div>
         </div>
 
-        {remaining >= 0 && remaining <= 7 && (
+        {Number.isFinite(remaining) && remaining >= 0 && remaining <= 7 && (
           <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
             <span className="material-symbols-outlined text-[20px] text-amber-600">
               schedule

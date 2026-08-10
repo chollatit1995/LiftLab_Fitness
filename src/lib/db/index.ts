@@ -1,6 +1,7 @@
 import { AppData } from "../types";
 import { initialData } from "../store";
 import { SCHEMA_STATEMENTS } from "./schema";
+import { toISODate } from "../dates";
 import { withDb } from "./client";
 
 export { isDbConfigured, getDatabaseUrl } from "./client";
@@ -37,7 +38,7 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       phone: r.phone as string,
       role: r.role as AppData["staff"][0]["role"],
       status: r.status as AppData["staff"][0]["status"],
-      joinedAt: String(r.joined_at).slice(0, 10),
+      joinedAt: toISODate(r.joined_at),
     })),
     classes: classes.map((r) => ({
       id: r.id as string,
@@ -68,8 +69,8 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       discountValue: Number(r.discount_value),
       packageId: (r.package_id as string | null) ?? null,
       code: (r.code as string | null) ?? null,
-      startDate: String(r.start_date).slice(0, 10),
-      endDate: String(r.end_date).slice(0, 10),
+      startDate: toISODate(r.start_date),
+      endDate: toISODate(r.end_date),
       status: r.status as AppData["promotions"][0]["status"],
       highlight: Boolean(r.highlight),
     })),
@@ -79,8 +80,8 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       email: r.email as string,
       phone: r.phone as string,
       packageId: r.package_id as string,
-      joinedAt: String(r.joined_at).slice(0, 10),
-      expiresAt: String(r.expires_at).slice(0, 10),
+      joinedAt: toISODate(r.joined_at),
+      expiresAt: toISODate(r.expires_at),
       status: r.status as AppData["members"][0]["status"],
     })),
     facilities: facilities.map((r) => ({
@@ -96,7 +97,7 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       memberId: r.member_id as string,
       resourceId: r.resource_id as string,
       resourceName: r.resource_name as string,
-      date: String(r.date).slice(0, 10),
+      date: toISODate(r.date),
       time: r.time as string,
       status: r.status as AppData["bookings"][0]["status"],
       notes: (r.notes as string | null) ?? undefined,
@@ -107,7 +108,7 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       memberName: r.member_name as string,
       item: r.item as string,
       amount: Number(r.amount),
-      date: String(r.date).slice(0, 10),
+      date: toISODate(r.date),
       type: r.type as AppData["sales"][0]["type"],
     })),
   };

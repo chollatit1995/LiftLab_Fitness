@@ -1,5 +1,6 @@
 import { AppUser, AppUserRole } from "../user-types";
 import { hashPassword, isHashed, verifyPassword } from "../password";
+import { toISODate } from "../dates";
 import { withDb } from "./client";
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -25,9 +26,9 @@ function mapUser(row: Record<string, unknown>): AppUser {
     name: row.name as string,
     role: row.role as AppUserRole,
     status: row.status as AppUser["status"],
-    createdAt: String(row.created_at).slice(0, 10),
+    createdAt: toISODate(row.created_at),
     mustChangePassword: Boolean(row.must_change_password),
-    lastLoginAt: row.last_login_at ? String(row.last_login_at).slice(0, 10) : null,
+    lastLoginAt: row.last_login_at ? toISODate(row.last_login_at) : null,
   };
 }
 
