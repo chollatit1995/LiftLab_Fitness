@@ -8,6 +8,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { useData } from "@/lib/data-context";
 import { generateId, roleLabels, statusColors } from "@/lib/store";
 import { can } from "@/lib/permissions";
+import { formatPhoneInput, handlePhoneKeyDown, handlePhonePaste, phoneFieldPattern, phoneFieldTitle } from "@/lib/phone";
 import { Staff, StaffRole } from "@/lib/types";
 
 const emptyForm = {
@@ -108,7 +109,7 @@ export default function StaffPage() {
     setForm({
       name: staff.name,
       email: staff.email,
-      phone: staff.phone,
+      phone: formatPhoneInput(staff.phone),
       role: staff.role,
       status: staff.status,
     });
@@ -392,9 +393,22 @@ export default function StaffPage() {
           <div>
             <label className="label-field">โทรศัพท์ / Phone</label>
             <input
+              type="tel"
               className="input-field"
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, phone: formatPhoneInput(e.target.value) })
+              }
+              onKeyDown={handlePhoneKeyDown}
+              onPaste={(e) =>
+                handlePhonePaste(e, (phone) => setForm({ ...form, phone }))
+              }
+              placeholder="092-860-3655"
+              inputMode="numeric"
+              autoComplete="tel"
+              pattern={phoneFieldPattern}
+              title={phoneFieldTitle}
+              maxLength={12}
               required
             />
           </div>

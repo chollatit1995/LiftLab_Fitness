@@ -14,6 +14,7 @@ import {
   statusColors,
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
+import { formatPhoneInput, handlePhoneKeyDown, handlePhonePaste, phoneDigits, phoneFieldPattern, phoneFieldTitle } from "@/lib/phone";
 import {
   bestOfferFor,
   livePromotions,
@@ -168,6 +169,7 @@ export default function MembersPage() {
           m.name.toLowerCase().includes(q) ||
           m.email.toLowerCase().includes(q) ||
           m.phone.includes(q) ||
+          phoneDigits(m.phone).includes(phoneDigits(q)) ||
           (pkg?.name.toLowerCase().includes(q) ?? false)
         );
       })
@@ -192,7 +194,7 @@ export default function MembersPage() {
     setForm({
       name: member.name,
       email: member.email,
-      phone: member.phone,
+      phone: formatPhoneInput(member.phone),
       packageId: member.packageId,
       joinedAt: member.joinedAt,
       expiresAt: member.expiresAt,
@@ -636,9 +638,22 @@ export default function MembersPage() {
           <div>
             <label className="label-field">โทรศัพท์ / Phone</label>
             <input
+              type="tel"
               className="input-field"
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, phone: formatPhoneInput(e.target.value) })
+              }
+              onKeyDown={handlePhoneKeyDown}
+              onPaste={(e) =>
+                handlePhonePaste(e, (phone) => setForm({ ...form, phone }))
+              }
+              placeholder="092-860-3655"
+              inputMode="numeric"
+              autoComplete="tel"
+              pattern={phoneFieldPattern}
+              title={phoneFieldTitle}
+              maxLength={12}
               required
             />
           </div>
