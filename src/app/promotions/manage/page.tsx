@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
@@ -181,8 +180,8 @@ export default function ManagePromotionsPage() {
       <PageHeader
         titleTh="โปรโมชั่น"
         titleEn="Promotions"
-        descriptionTh={`กำลังแสดงให้ลูกค้าเห็น ${liveCount} โปร`}
-        descriptionEn="โปรที่เปิดใช้งานและอยู่ในช่วงวันที่จะขึ้นหน้าลูกค้าทันที"
+        descriptionTh={`กำลังแสดงให้สมาชิกเห็น ${liveCount} โปร`}
+        descriptionEn="โปรที่เปิดใช้งานและอยู่ในช่วงวันที่จะขึ้นหน้าสมาชิกทันที"
         action={
           canEdit ? (
             <button onClick={openCreate} className="btn-primary">
@@ -193,23 +192,11 @@ export default function ManagePromotionsPage() {
         }
       />
 
-      <div className="card mb-6 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <span className="material-symbols-outlined text-[20px] text-brand-600">
-            public
-          </span>
-          <span>
-            ลูกค้าดูได้ที่{" "}
-            <Link
-              href="/promotions"
-              target="_blank"
-              className="font-medium text-brand-600 underline underline-offset-2"
-            >
-              /promotions
-            </Link>{" "}
-            โดยไม่ต้องเข้าสู่ระบบ
-          </span>
-        </div>
+      <div className="card mb-6 flex items-center gap-2 p-4 text-sm text-slate-600">
+        <span className="material-symbols-outlined text-[20px] text-brand-600">
+          groups
+        </span>
+        <span>สมาชิกจะเห็นโปรที่กำลังใช้งานในหน้าสมาชิกหลังเข้าสู่ระบบ</span>
       </div>
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -346,7 +333,7 @@ export default function ManagePromotionsPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editingId ? "แก้ไขโปรโมชั่น" : "เพิ่มโปรโมชั่น"}
-        subtitle="ข้อมูลนี้จะแสดงให้ลูกค้าเห็นในหน้าโปรโมชั่น"
+        subtitle="ข้อมูลนี้จะแสดงให้สมาชิกเห็นหลังเข้าสู่ระบบ"
         wide
       >
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -13,12 +13,6 @@ import { canAccessPath } from "@/lib/permissions";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
 
-/**
- * เทียบแบบตรงตัวเท่านั้น เพราะหน้าโปรโมชั่นฝั่งลูกค้าเปิดสาธารณะ
- * แต่ /promotions/manage ที่อยู่ใต้ prefix เดียวกันต้องยัง login ก่อน
- */
-const PUBLIC_EXACT_PATHS = ["/promotions", "/api/promotions"];
-
 const MEMBER_PUBLIC_PATHS = ["/portal/login", "/api/portal/login"];
 
 /** เส้นทางที่สมาชิกยังเข้าได้แม้ยังไม่ได้เปลี่ยนรหัสผ่านที่พนักงานตั้งให้ */
@@ -75,10 +69,6 @@ const PASSWORD_CHANGE_ALLOWED = [
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (PUBLIC_EXACT_PATHS.includes(pathname)) {
-    return NextResponse.next();
-  }
 
   if (pathname.startsWith("/portal") || pathname.startsWith("/api/portal")) {
     return handlePortal(request, pathname);

@@ -9,13 +9,9 @@ import {
   bestOfferFor,
   daysLeft,
   discountBadge,
+  livePromotions,
   promotionsForPackage,
 } from "@/lib/promotions";
-
-interface OfferData {
-  promotions: Promotion[];
-  packages: MembershipPackage[];
-}
 
 interface PortalData {
   member: {
@@ -42,6 +38,8 @@ interface PortalData {
     time: string;
     status: string;
   }[];
+  promotions: Promotion[];
+  packages: MembershipPackage[];
 }
 
 const statusLabels: Record<string, string> = {
@@ -74,19 +72,13 @@ function daysUntil(dateStr: string): number {
 export default function PortalPage() {
   const router = useRouter();
   const [data, setData] = useState<PortalData | null>(null);
-  const [offers, setOffers] = useState<OfferData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const [meRes, offerRes] = await Promise.all([
-        fetch("/api/portal/me"),
-        fetch("/api/promotions"),
-      ]);
-
-      const json = await meRes.json();
+      const res = await fetch("/api/portal/me");
+      const json = await res.json();
       if (json.member) setData(json);
-      if (offerRes.ok) setOffers(await offerRes.json());
     } finally {
       setLoading(false);
     }
@@ -128,8 +120,8 @@ export default function PortalPage() {
   const upcoming = bookings.filter((b) => b.status === "confirmed");
   const history = bookings.filter((b) => b.status !== "confirmed");
 
-  const promotions = offers?.promotions ?? [];
-  const packages = offers?.packages ?? [];
+  const promotions = livePromotions(data.promotions ?? []);
+  const packages = data.packages ?? [];
   const myPromotions = promotionsForPackage(member.packageId, promotions);
   const otherPackages = packages.filter((p) => p.id !== member.packageId);
 

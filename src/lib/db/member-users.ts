@@ -1,4 +1,5 @@
 import { hashPassword, isHashed, verifyPassword } from "../password";
+import { MembershipPackage, Promotion } from "../types";
 import { withDb } from "./client";
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -48,6 +49,9 @@ export interface MemberPortalData {
     time: string;
     status: string;
   }[];
+  /** โปรที่เปิดใช้งานอยู่ ส่วนการกรองตามช่วงวันที่ทำต่อที่ฝั่งหน้าเว็บ */
+  promotions: Promotion[];
+  packages: MembershipPackage[];
 }
 
 export async function authenticateMember(
@@ -223,17 +227,28 @@ export async function loadMemberPortalData(
     if (memberRows.length === 0) return null;
     const m = memberRows[0];
 
-    const [packageRows, bookingRows] = await Promise.all([
-      sql`
+    const [packageRows, bookingRows, promotionRows, allPackageRows] =
+      await Promise.all([
+        sql`
         SELECT name, price, duration_days, features
         FROM membership_packages WHERE id = ${m.package_id as string} LIMIT 1
       `,
-      sql`
+        sql`
         SELECT id, type, resource_name, date, time, status
         FROM bookings WHERE member_id = ${memberId}
         ORDER BY date DESC, time DESC
       `,
-    ]);
+        sql`
+        SELECT id, title, description, discount_type, discount_value,
+               package_id, code, start_date, end_date, status, highlight
+        FROM promotions WHERE status = 'active'
+        ORDER BY highlight DESC, end_date
+      `,
+        sql`
+        SELECT id, name, description, price, duration_days, features, status, popular
+        FROM membership_packages WHERE status = 'active' ORDER BY price
+      `,
+      ]);
 
     return {
       member: {
@@ -262,6 +277,29 @@ export async function loadMemberPortalData(
         date: String(b.date).slice(0, 10),
         time: b.time as string,
         status: b.status as string,
+      })),
+      promotions: promotionRows.map((p) => ({
+        id: p.id as string,
+        title: p.title as string,
+        description: p.description as string,
+        discountType: p.discount_type as Promotion["discountType"],
+        discountValue: Number(p.discount_value),
+        packageId: (p.package_id as string | null) ?? null,
+        code: (p.code as string | null) ?? null,
+        startDate: String(p.start_date).slice(0, 10),
+        endDate: String(p.end_date).slice(0, 10),
+        status: p.status as Promotion["status"],
+        highlight: Boolean(p.highlight),
+      })),
+      packages: allPackageRows.map((p) => ({
+        id: p.id as string,
+        name: p.name as string,
+        description: p.description as string,
+        price: Number(p.price),
+        durationDays: Number(p.duration_days),
+        features: p.features as string[],
+        status: p.status as MembershipPackage["status"],
+        popular: Boolean(p.popular),
       })),
     };
   });
