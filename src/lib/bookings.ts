@@ -196,9 +196,9 @@ export function bookingTypeMeta(type: BookingType) {
         icon: "fitness_center",
         label: "คลาส",
         labelEn: "Class",
-        gradient: "from-violet-500 to-purple-600",
-        bg: "bg-violet-50",
-        text: "text-violet-700",
+        gradient: "from-teal-500 to-cyan-600",
+        bg: "bg-teal-50",
+        text: "text-teal-700",
       };
     case "trainer":
       return {
