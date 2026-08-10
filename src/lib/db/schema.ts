@@ -75,4 +75,9 @@ export const SCHEMA_STATEMENTS = [
     status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  // ตารางเดิมถูกสร้างไว้ก่อนมีคอลัมน์เหล่านี้ CREATE TABLE IF NOT EXISTS จึงไม่เพิ่มให้
+  `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ`,
+  `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ`,
 ];

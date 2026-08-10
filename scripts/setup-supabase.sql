@@ -87,11 +87,16 @@ CREATE TABLE IF NOT EXISTS app_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
 -- ========== ผู้ใช้งานระบบ ==========
 
-INSERT INTO app_users (id, email, password, name, role, status) VALUES
-  ('u1', 'admin@liftlab.fitness', 'LiftLab@2026', 'ผู้ดูแลระบบ', 'admin', 'active'),
-  ('u2', 'manager@liftlab.fitness', 'LiftLab@2026', 'ผู้จัดการ', 'manager', 'active')
+INSERT INTO app_users (id, email, password, name, role, status, must_change_password) VALUES
+  ('u1', 'admin@liftlab.fitness', 'LiftLab@2026', 'ผู้ดูแลระบบ', 'admin', 'active', TRUE),
+  ('u2', 'manager@liftlab.fitness', 'LiftLab@2026', 'ผู้จัดการ', 'manager', 'active', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 -- ========== ข้อมูลตัวอย่าง ==========

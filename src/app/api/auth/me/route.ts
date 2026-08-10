@@ -10,11 +10,20 @@ export async function GET() {
     return NextResponse.json({ user: null });
   }
 
-  const user = await verifySession(token);
-  if (!user) {
+  const session = await verifySession(token);
+  if (!session) {
     cookieStore.delete(SESSION_COOKIE);
     return NextResponse.json({ user: null });
   }
 
-  return NextResponse.json({ user });
+  return NextResponse.json({
+    user: {
+      id: session.id,
+      email: session.email,
+      name: session.name,
+      role: session.role,
+      mustChangePassword: session.mustChangePassword,
+    },
+    expiresAt: session.expiresAt,
+  });
 }

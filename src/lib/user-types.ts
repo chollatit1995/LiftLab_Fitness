@@ -7,6 +7,8 @@ export interface AppUser {
   role: AppUserRole;
   status: "active" | "inactive";
   createdAt: string;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
 }
 
 export interface AppUserWithPassword extends AppUser {

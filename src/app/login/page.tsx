@@ -10,6 +10,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +24,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
 
       const data = await res.json();
@@ -33,7 +34,7 @@ function LoginForm() {
         return;
       }
 
-      router.push(redirect);
+      router.push(data.mustChangePassword ? "/change-password" : redirect);
       router.refresh();
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
@@ -175,6 +176,16 @@ function LoginForm() {
                 </button>
               </div>
             </div>
+
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              จำฉันไว้ 30 วัน / Remember me
+            </label>
 
             <button
               type="submit"

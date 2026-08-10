@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
@@ -11,6 +11,7 @@ import {
   generateId,
   statusColors,
 } from "@/lib/store";
+import { can } from "@/lib/permissions";
 import { Member, Sale } from "@/lib/types";
 
 type MemberStatus = Member["status"];
@@ -57,6 +58,16 @@ export default function MembersPage() {
   const [renewPackageId, setRenewPackageId] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [role, setRole] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setRole(d.user?.role ?? ""))
+      .catch(() => setRole(""));
+  }, []);
+
+  const canDelete = can(role, "members.delete");
 
   const activePackages = data.packages.filter((p) => p.status === "active");
 
@@ -219,6 +230,7 @@ export default function MembersPage() {
   };
 
   const deleteMember = (id: string) => {
+    if (!canDelete) return;
     if (!confirm("ต้องการลบสมาชิกคนนี้? การจองที่เกี่ยวข้องจะยังคงอยู่")) return;
     updateData((prev) => ({
       ...prev,
@@ -410,16 +422,18 @@ export default function MembersPage() {
                               edit
                             </span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteMember(member.id)}
-                            title="ลบ"
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">
-                              delete
-                            </span>
-                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => deleteMember(member.id)}
+                              title="ลบ"
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                delete
+                              </span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

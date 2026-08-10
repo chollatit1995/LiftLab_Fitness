@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
 
 interface User {
   email: string;
@@ -10,44 +11,10 @@ interface User {
   role: string;
 }
 
-const navItems = [
-  {
-    href: "/",
-    icon: "dashboard",
-    labelTh: "แดชบอร์ด",
-    labelEn: "Dashboard",
-  },
-  {
-    href: "/bookings",
-    icon: "event",
-    labelTh: "จองคลาส / PT / พื้นที่",
-    labelEn: "Bookings",
-  },
-  {
-    href: "/members",
-    icon: "card_membership",
-    labelTh: "จัดการสมาชิก",
-    labelEn: "Members",
-  },
-  {
-    href: "/users",
-    icon: "admin_panel_settings",
-    labelTh: "ผู้ใช้งานระบบ",
-    labelEn: "Users",
-  },
-  {
-    href: "/staff",
-    icon: "group",
-    labelTh: "จัดการพนักงาน",
-    labelEn: "Staff",
-  },
-  {
-    href: "/classes",
-    icon: "fitness_center",
-    labelTh: "คลาส & แพ็กเกจ",
-    labelEn: "Classes & Packages",
-  },
-];
+const BARE_LAYOUT_PATHS = ["/login", "/change-password"];
+
+/** เตือนผู้ใช้ก่อน session หมดอายุ (วินาที) */
+const EXPIRY_WARNING_SECONDS = 5 * 60;
 
 function MaterialIcon({ name }: { name: string }) {
   return (
@@ -65,17 +32,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isLoginPage = pathname === "/login";
+  const isBareLayout = BARE_LAYOUT_PATHS.includes(pathname);
+
+  const loadSession = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      setUser(data.user);
+      setExpiresAt(data.expiresAt ?? null);
+    } catch {
+      setUser(null);
+    }
+  }, []);
 
   useEffect(() => {
-    if (isLoginPage) return;
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => setUser(d.user))
-      .catch(() => setUser(null));
-  }, [isLoginPage, pathname]);
+    if (isBareLayout) return;
+    loadSession();
+  }, [isBareLayout, pathname, loadSession]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -94,15 +71,49 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [mobileOpen]);
 
+  useEffect(() => {
+    if (!expiresAt) {
+      setSecondsLeft(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = expiresAt - Math.floor(Date.now() / 1000);
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        router.push("/login");
+        router.refresh();
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 30_000);
+    return () => clearInterval(timer);
+  }, [expiresAt, router]);
+
+  const navItems = useMemo(
+    () => (user ? navItemsForRole(user.role) : []),
+    [user]
+  );
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   };
 
-  if (isLoginPage) {
+  const handleExtendSession = async () => {
+    // middleware จะออก cookie ใหม่ให้เองเมื่อมี request เข้ามาตอนใกล้หมดอายุ
+    router.refresh();
+    await loadSession();
+  };
+
+  if (isBareLayout) {
     return <>{children}</>;
   }
+
+  const showExpiryWarning =
+    secondsLeft !== null &&
+    secondsLeft > 0 &&
+    secondsLeft <= EXPIRY_WARNING_SECONDS;
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -138,9 +149,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
-              <span
-                className={active ? "text-brand-600" : "text-slate-400"}
-              >
+              <span className={active ? "text-brand-600" : "text-slate-400"}>
                 <MaterialIcon name={item.icon} />
               </span>
               <span className="min-w-0 flex-1">
@@ -156,7 +165,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="border-t border-slate-200/80 p-4">
         {user && (
-          <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+          <Link
+            href="/profile"
+            className={`mb-3 flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${
+              pathname.startsWith("/profile")
+                ? "bg-brand-50"
+                : "bg-slate-50 hover:bg-slate-100"
+            }`}
+          >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
               {user.name.charAt(0)}
             </div>
@@ -164,9 +180,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               <p className="truncate text-sm font-medium text-slate-900">
                 {user.name}
               </p>
-              <p className="truncate text-[11px] text-slate-400">{user.email}</p>
+              <p className="truncate text-[11px] text-slate-400">
+                {isValidRole(user.role) ? roleLabels[user.role].th : user.role}
+              </p>
             </div>
-          </div>
+            <span className="text-slate-300">
+              <MaterialIcon name="chevron_right" />
+            </span>
+          </Link>
         )}
         <button
           onClick={handleLogout}
@@ -186,12 +207,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         rel="stylesheet"
       />
 
-      {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200/80 bg-white lg:block">
         {sidebar}
       </aside>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
@@ -217,7 +236,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <div className="lg:pl-64">
-        {/* Mobile top bar */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-md lg:hidden">
           <button
             type="button"
@@ -233,11 +251,33 @@ export function AppShell({ children }: { children: ReactNode }) {
             </p>
           </div>
           {user && (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+            <Link
+              href="/profile"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700"
+            >
               {user.name.charAt(0)}
-            </div>
+            </Link>
           )}
         </header>
+
+        {showExpiryWarning && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 sm:px-6">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 text-sm text-amber-800">
+              <span className="material-symbols-outlined text-[18px]">
+                schedule
+              </span>
+              <span>
+                เซสชันจะหมดอายุใน {Math.ceil((secondsLeft ?? 0) / 60)} นาที
+              </span>
+              <button
+                onClick={handleExtendSession}
+                className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+              >
+                ต่ออายุการใช้งาน
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           {children}

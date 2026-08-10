@@ -1,6 +1,22 @@
-import { SessionPayload } from "../auth";
 import { AppUser, AppUserRole } from "../user-types";
+import { hashPassword, isHashed, verifyPassword } from "../password";
 import { withDb } from "./client";
+
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_MINUTES = 15;
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  mustChangePassword: boolean;
+}
+
+export type LoginResult =
+  | { ok: true; user: AuthenticatedUser }
+  | { ok: false; reason: "invalid"; remainingAttempts: number | null }
+  | { ok: false; reason: "locked"; minutesLeft: number };
 
 function mapUser(row: Record<string, unknown>): AppUser {
   return {
@@ -10,39 +26,155 @@ function mapUser(row: Record<string, unknown>): AppUser {
     role: row.role as AppUserRole,
     status: row.status as AppUser["status"],
     createdAt: String(row.created_at).slice(0, 10),
+    mustChangePassword: Boolean(row.must_change_password),
+    lastLoginAt: row.last_login_at ? String(row.last_login_at).slice(0, 10) : null,
   };
 }
 
-export async function validateCredentials(
+export async function authenticate(
   email: string,
   password: string
-): Promise<SessionPayload | null> {
+): Promise<LoginResult> {
   return withDb(async (sql) => {
     const rows = await sql`
-      SELECT id, email, name, role, password
+      SELECT id, email, name, role, password, must_change_password,
+             failed_attempts, locked_until
       FROM app_users
       WHERE email = ${email} AND status = 'active'
       LIMIT 1
     `;
 
-    if (rows.length === 0) return null;
+    if (rows.length === 0) {
+      return { ok: false, reason: "invalid", remainingAttempts: null };
+    }
 
-    const user = rows[0];
-    if (password !== (user.password as string)) return null;
+    const row = rows[0];
+    const lockedUntil = row.locked_until ? new Date(String(row.locked_until)) : null;
+
+    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil((lockedUntil.getTime() - Date.now()) / 60000)
+      );
+      return { ok: false, reason: "locked", minutesLeft };
+    }
+
+    const stored = row.password as string;
+    const valid = await verifyPassword(password, stored);
+
+    if (!valid) {
+      const attempts = Number(row.failed_attempts ?? 0) + 1;
+      const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
+
+      await sql`
+        UPDATE app_users
+        SET failed_attempts = ${shouldLock ? 0 : attempts},
+            locked_until = ${
+              shouldLock
+                ? new Date(Date.now() + LOCK_MINUTES * 60000).toISOString()
+                : null
+            }
+        WHERE id = ${row.id as string}
+      `;
+
+      if (shouldLock) {
+        return { ok: false, reason: "locked", minutesLeft: LOCK_MINUTES };
+      }
+      return {
+        ok: false,
+        reason: "invalid",
+        remainingAttempts: MAX_FAILED_ATTEMPTS - attempts,
+      };
+    }
+
+    // อัปเกรดรหัสผ่านที่ยังเก็บเป็น plain text ให้เป็น hash ตอนที่ยืนยันตัวตนสำเร็จ
+    const upgraded = isHashed(stored) ? stored : await hashPassword(password);
+
+    await sql`
+      UPDATE app_users
+      SET failed_attempts = 0,
+          locked_until = NULL,
+          last_login_at = NOW(),
+          password = ${upgraded}
+      WHERE id = ${row.id as string}
+    `;
 
     return {
-      id: user.id as string,
-      email: user.email as string,
-      name: user.name as string,
-      role: user.role as string,
+      ok: true,
+      user: {
+        id: row.id as string,
+        email: row.email as string,
+        name: row.name as string,
+        role: row.role as string,
+        mustChangePassword: Boolean(row.must_change_password),
+      },
     };
+  });
+}
+
+export async function getUserById(id: string): Promise<AppUser | null> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT id, email, name, role, status, created_at,
+             must_change_password, last_login_at
+      FROM app_users
+      WHERE id = ${id}
+      LIMIT 1
+    `;
+    return rows.length > 0 ? mapUser(rows[0]) : null;
+  });
+}
+
+export async function changeOwnPassword(
+  id: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT password FROM app_users WHERE id = ${id} LIMIT 1
+    `;
+    if (rows.length === 0) return { ok: false, error: "ไม่พบบัญชีผู้ใช้" };
+
+    const stored = rows[0].password as string;
+    const valid = await verifyPassword(currentPassword, stored);
+    if (!valid) return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+
+    if (await verifyPassword(newPassword, stored)) {
+      return { ok: false, error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม" };
+    }
+
+    const hashed = await hashPassword(newPassword);
+    await sql`
+      UPDATE app_users
+      SET password = ${hashed}, must_change_password = FALSE
+      WHERE id = ${id}
+    `;
+    return { ok: true };
+  });
+}
+
+export async function updateOwnProfile(
+  id: string,
+  name: string
+): Promise<AppUser | null> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      UPDATE app_users
+      SET name = ${name}
+      WHERE id = ${id}
+      RETURNING id, email, name, role, status, created_at,
+                must_change_password, last_login_at
+    `;
+    return rows.length > 0 ? mapUser(rows[0]) : null;
   });
 }
 
 export async function listUsers(): Promise<AppUser[]> {
   return withDb(async (sql) => {
     const rows = await sql`
-      SELECT id, email, name, role, status, created_at
+      SELECT id, email, name, role, status, created_at,
+             must_change_password, last_login_at
       FROM app_users
       ORDER BY created_at
     `;
@@ -57,19 +189,23 @@ export async function createUser(input: {
   name: string;
   role: AppUserRole;
   status?: AppUser["status"];
+  mustChangePassword?: boolean;
 }): Promise<AppUser> {
+  const hashed = await hashPassword(input.password);
   return withDb(async (sql) => {
     const rows = await sql`
-      INSERT INTO app_users (id, email, password, name, role, status)
+      INSERT INTO app_users (id, email, password, name, role, status, must_change_password)
       VALUES (
         ${input.id},
         ${input.email},
-        ${input.password},
+        ${hashed},
         ${input.name},
         ${input.role},
-        ${input.status ?? "active"}
+        ${input.status ?? "active"},
+        ${input.mustChangePassword ?? true}
       )
-      RETURNING id, email, name, role, status, created_at
+      RETURNING id, email, name, role, status, created_at,
+                must_change_password, last_login_at
     `;
     return mapUser(rows[0]);
   });
@@ -85,23 +221,23 @@ export async function updateUser(
     status?: AppUser["status"];
   }
 ): Promise<AppUser | null> {
-  return withDb(async (sql) => {
-    const existing = await sql`
-      SELECT id FROM app_users WHERE id = ${id} LIMIT 1
-    `;
-    if (existing.length === 0) return null;
+  const hashed = input.password ? await hashPassword(input.password) : undefined;
 
+  return withDb(async (sql) => {
     const current = await sql`
-      SELECT email, name, role, status, password
+      SELECT email, name, role, status, password, must_change_password
       FROM app_users WHERE id = ${id} LIMIT 1
     `;
+    if (current.length === 0) return null;
     const row = current[0];
 
     const email = input.email ?? (row.email as string);
     const name = input.name ?? (row.name as string);
     const role = input.role ?? (row.role as AppUserRole);
     const status = input.status ?? (row.status as AppUser["status"]);
-    const password = input.password ?? (row.password as string);
+    const password = hashed ?? (row.password as string);
+    // admin ตั้งรหัสใหม่ให้ = เจ้าของบัญชีต้องเปลี่ยนเองอีกครั้งตอน login
+    const mustChange = hashed ? true : Boolean(row.must_change_password);
 
     const rows = await sql`
       UPDATE app_users
@@ -109,9 +245,11 @@ export async function updateUser(
           name = ${name},
           role = ${role},
           status = ${status},
-          password = ${password}
+          password = ${password},
+          must_change_password = ${mustChange}
       WHERE id = ${id}
-      RETURNING id, email, name, role, status, created_at
+      RETURNING id, email, name, role, status, created_at,
+                must_change_password, last_login_at
     `;
     return mapUser(rows[0]);
   });
@@ -156,7 +294,11 @@ export async function seedDefaultUsers(): Promise<void> {
   ];
 
   for (const user of users) {
-    await createUser({ ...user, password: defaultPassword });
+    await createUser({
+      ...user,
+      password: defaultPassword,
+      mustChangePassword: true,
+    });
   }
 }
 
