@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
@@ -34,7 +34,6 @@ function isActivePath(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { hydrated: dataHydrated, usingDatabase } = useData();
   const [user, setUser] = useState<User | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
@@ -50,9 +49,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/me");
       const data = await res.json();
       setUser(data.user);
-      setExpiresAt(data.expiresAt ?? null);
+      setExpiresAt(data.user ? (data.expiresAt ?? null) : null);
     } catch {
       setUser(null);
+      setExpiresAt(null);
     }
   }, []);
 
@@ -60,6 +60,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (isBareLayout) return;
     loadSession();
   }, [isBareLayout, pathname, loadSession]);
+
+  /** ดึง expiresAt ใหม่เป็นระยะ — middleware อาจต่ออายุ cookie แล้วแต่ฝั่ง client ยังใช้ค่าเก่า */
+  useEffect(() => {
+    if (isBareLayout) return;
+
+    const sync = () => loadSession();
+    const interval = setInterval(sync, 5 * 60 * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isBareLayout, loadSession]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -79,22 +96,43 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [mobileOpen]);
 
   useEffect(() => {
-    if (!expiresAt) {
+    if (!user || !expiresAt) {
       setSecondsLeft(null);
       return;
     }
-    const tick = () => {
+
+    let redirecting = false;
+
+    const tick = async () => {
       const remaining = expiresAt - Math.floor(Date.now() / 1000);
       setSecondsLeft(remaining);
-      if (remaining <= 0) {
-        router.push("/login");
-        router.refresh();
+      if (remaining > 0) return;
+      if (redirecting) return;
+      redirecting = true;
+
+      // ยืนยันกับเซิร์ฟเวอร์ก่อน — cookie อาจถูกต่ออายุแล้วแต่ client ยังใช้ exp เก่า
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        if (data.user && data.expiresAt) {
+          const stillLeft = data.expiresAt - Math.floor(Date.now() / 1000);
+          if (stillLeft > 0) {
+            setExpiresAt(data.expiresAt);
+            redirecting = false;
+            return;
+          }
+        }
+      } catch {
+        // session หมดจริง — ไป login
       }
+
+      window.location.href = "/login";
     };
-    tick();
-    const timer = setInterval(tick, 30_000);
+
+    void tick();
+    const timer = setInterval(() => void tick(), 30_000);
     return () => clearInterval(timer);
-  }, [expiresAt, router]);
+  }, [expiresAt, user]);
 
   const navItems = useMemo(
     () => (user ? navItemsForRole(user.role) : []),
@@ -103,13 +141,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    window.location.href = "/login";
   };
 
   const handleExtendSession = async () => {
-    // middleware จะออก cookie ใหม่ให้เองเมื่อมี request เข้ามาตอนใกล้หมดอายุ
-    router.refresh();
+    await fetch("/api/auth/me");
     await loadSession();
   };
 
