@@ -80,4 +80,17 @@ export const SCHEMA_STATEMENTS = [
   `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ`,
   `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ`,
+  // ผูกบัญชี login กับทะเบียนพนักงาน เพื่อสร้างบัญชีจากหน้าจัดการพนักงานได้
+  `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS staff_id TEXT`,
+  // แยกตารางออกจาก members เพราะ saveAppData ลบและเขียนแถว members ใหม่ทุกครั้ง
+  `CREATE TABLE IF NOT EXISTS member_users (
+    member_id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMPTZ,
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ];

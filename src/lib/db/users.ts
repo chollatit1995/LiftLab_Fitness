@@ -255,6 +255,47 @@ export async function updateUser(
   });
 }
 
+/** สร้างบัญชี login ให้พนักงานจากหน้าจัดการพนักงาน — บังคับเป็น role staff เสมอ */
+export async function createStaffAccount(input: {
+  staffId: string;
+  email: string;
+  name: string;
+  password: string;
+}): Promise<
+  { ok: true; user: AppUser } | { ok: false; error: string }
+> {
+  const hashed = await hashPassword(input.password);
+
+  return withDb(async (sql) => {
+    const existing = await sql`
+      SELECT id, staff_id FROM app_users
+      WHERE email = ${input.email} OR staff_id = ${input.staffId}
+      LIMIT 1
+    `;
+    if (existing.length > 0) {
+      return { ok: false, error: "พนักงานคนนี้หรืออีเมลนี้มีบัญชีอยู่แล้ว" };
+    }
+
+    const id = `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const rows = await sql`
+      INSERT INTO app_users (id, email, password, name, role, status, must_change_password, staff_id)
+      VALUES (${id}, ${input.email}, ${hashed}, ${input.name}, 'staff', 'active', TRUE, ${input.staffId})
+      RETURNING id, email, name, role, status, created_at,
+                must_change_password, last_login_at
+    `;
+    return { ok: true, user: mapUser(rows[0]) };
+  });
+}
+
+export async function listStaffAccountIds(): Promise<string[]> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT staff_id FROM app_users WHERE staff_id IS NOT NULL
+    `;
+    return rows.map((r) => r.staff_id as string);
+  });
+}
+
 export async function deleteUser(id: string): Promise<boolean> {
   return withDb(async (sql) => {
     const result = await sql`

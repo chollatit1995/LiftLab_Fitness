@@ -84,14 +84,19 @@ export function canAccessPath(role: string, pathname: string): boolean {
 
 export type Permission =
   | "members.delete"
+  | "members.grantAccess"
   | "classes.edit"
   | "staff.manage"
+  | "staff.grantAccess"
   | "users.manage";
 
 const PERMISSIONS: Record<Permission, AppUserRole[]> = {
   "members.delete": ["admin", "manager"],
+  "members.grantAccess": ["admin", "manager"],
   "classes.edit": ["admin", "manager"],
   "staff.manage": ["admin", "manager"],
+  // บัญชีที่สร้างจากหน้านี้ถูกบังคับเป็น role staff เสมอ manager จึงยกระดับสิทธิ์ใครไม่ได้
+  "staff.grantAccess": ["admin", "manager"],
   "users.manage": ["admin"],
 };
 

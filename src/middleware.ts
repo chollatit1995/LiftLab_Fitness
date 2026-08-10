@@ -2,14 +2,62 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
   createSession,
+  MEMBER_SESSION_COOKIE,
   SESSION_COOKIE,
   sessionCookieOptions,
   shouldRenew,
+  verifyMemberSession,
   verifySession,
 } from "@/lib/auth";
 import { canAccessPath } from "@/lib/permissions";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+
+const MEMBER_PUBLIC_PATHS = ["/portal/login", "/api/portal/login"];
+
+/** เส้นทางที่สมาชิกยังเข้าได้แม้ยังไม่ได้เปลี่ยนรหัสผ่านที่พนักงานตั้งให้ */
+const MEMBER_PASSWORD_ALLOWED = [
+  "/portal/change-password",
+  "/api/portal/password",
+  "/api/portal/logout",
+  "/api/portal/me",
+];
+
+async function handlePortal(request: NextRequest, pathname: string) {
+  const token = request.cookies.get(MEMBER_SESSION_COOKIE)?.value;
+  const session = token ? await verifyMemberSession(token) : null;
+
+  if (MEMBER_PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+    if (pathname === "/portal/login" && session) {
+      return NextResponse.redirect(new URL("/portal", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (!session) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL("/portal/login", request.url));
+  }
+
+  if (
+    session.mustChangePassword &&
+    !MEMBER_PASSWORD_ALLOWED.some((p) => pathname.startsWith(p))
+  ) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "ต้องเปลี่ยนรหัสผ่านก่อนใช้งาน" },
+        { status: 403 }
+      );
+    }
+    return NextResponse.redirect(
+      new URL("/portal/change-password", request.url)
+    );
+  }
+
+  return NextResponse.next();
+}
 
 /** เส้นทางที่ยังต้องเข้าถึงได้แม้ยังไม่ได้เปลี่ยนรหัสผ่านเริ่มต้น */
 const PASSWORD_CHANGE_ALLOWED = [
@@ -21,6 +69,11 @@ const PASSWORD_CHANGE_ALLOWED = [
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/portal") || pathname.startsWith("/api/portal")) {
+    return handlePortal(request, pathname);
+  }
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token) : null;
 

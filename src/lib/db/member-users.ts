@@ -1,0 +1,266 @@
+import { hashPassword, isHashed, verifyPassword } from "../password";
+import { withDb } from "./client";
+
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_MINUTES = 15;
+
+export interface MemberAccount {
+  memberId: string;
+  email: string;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+}
+
+export interface AuthenticatedMember {
+  memberId: string;
+  email: string;
+  name: string;
+  mustChangePassword: boolean;
+}
+
+export type MemberLoginResult =
+  | { ok: true; member: AuthenticatedMember }
+  | { ok: false; reason: "invalid" }
+  | { ok: false; reason: "locked"; minutesLeft: number };
+
+export interface MemberPortalData {
+  member: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    joinedAt: string;
+    expiresAt: string;
+    status: string;
+  };
+  package: {
+    name: string;
+    price: number;
+    durationDays: number;
+    features: string[];
+  } | null;
+  bookings: {
+    id: string;
+    type: string;
+    resourceName: string;
+    date: string;
+    time: string;
+    status: string;
+  }[];
+}
+
+export async function authenticateMember(
+  email: string,
+  password: string
+): Promise<MemberLoginResult> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT mu.member_id, mu.email, mu.password, mu.must_change_password,
+             mu.failed_attempts, mu.locked_until, m.name
+      FROM member_users mu
+      JOIN members m ON m.id = mu.member_id
+      WHERE mu.email = ${email}
+      LIMIT 1
+    `;
+
+    if (rows.length === 0) return { ok: false, reason: "invalid" };
+
+    const row = rows[0];
+    const lockedUntil = row.locked_until
+      ? new Date(String(row.locked_until))
+      : null;
+
+    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil((lockedUntil.getTime() - Date.now()) / 60000)
+      );
+      return { ok: false, reason: "locked", minutesLeft };
+    }
+
+    const stored = row.password as string;
+    const valid = await verifyPassword(password, stored);
+
+    if (!valid) {
+      const attempts = Number(row.failed_attempts ?? 0) + 1;
+      const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
+
+      await sql`
+        UPDATE member_users
+        SET failed_attempts = ${shouldLock ? 0 : attempts},
+            locked_until = ${
+              shouldLock
+                ? new Date(Date.now() + LOCK_MINUTES * 60000).toISOString()
+                : null
+            }
+        WHERE member_id = ${row.member_id as string}
+      `;
+
+      if (shouldLock) {
+        return { ok: false, reason: "locked", minutesLeft: LOCK_MINUTES };
+      }
+      return { ok: false, reason: "invalid" };
+    }
+
+    const upgraded = isHashed(stored) ? stored : await hashPassword(password);
+
+    await sql`
+      UPDATE member_users
+      SET failed_attempts = 0,
+          locked_until = NULL,
+          last_login_at = NOW(),
+          password = ${upgraded}
+      WHERE member_id = ${row.member_id as string}
+    `;
+
+    return {
+      ok: true,
+      member: {
+        memberId: row.member_id as string,
+        email: row.email as string,
+        name: row.name as string,
+        mustChangePassword: Boolean(row.must_change_password),
+      },
+    };
+  });
+}
+
+/** ตั้ง/รีเซ็ตรหัสผ่าน portal ให้สมาชิก — เรียกจากฝั่งพนักงาน */
+export async function setMemberPassword(
+  memberId: string,
+  email: string,
+  password: string
+): Promise<MemberAccount> {
+  const hashed = await hashPassword(password);
+  return withDb(async (sql) => {
+    const rows = await sql`
+      INSERT INTO member_users (member_id, email, password, must_change_password)
+      VALUES (${memberId}, ${email}, ${hashed}, TRUE)
+      ON CONFLICT (member_id) DO UPDATE
+      SET email = ${email},
+          password = ${hashed},
+          must_change_password = TRUE,
+          failed_attempts = 0,
+          locked_until = NULL
+      RETURNING member_id, email, must_change_password, last_login_at
+    `;
+    const row = rows[0];
+    return {
+      memberId: row.member_id as string,
+      email: row.email as string,
+      mustChangePassword: Boolean(row.must_change_password),
+      lastLoginAt: row.last_login_at
+        ? String(row.last_login_at).slice(0, 10)
+        : null,
+    };
+  });
+}
+
+export async function listMemberAccounts(): Promise<MemberAccount[]> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT member_id, email, must_change_password, last_login_at
+      FROM member_users
+    `;
+    return rows.map((row) => ({
+      memberId: row.member_id as string,
+      email: row.email as string,
+      mustChangePassword: Boolean(row.must_change_password),
+      lastLoginAt: row.last_login_at
+        ? String(row.last_login_at).slice(0, 10)
+        : null,
+    }));
+  });
+}
+
+export async function revokeMemberAccess(memberId: string): Promise<boolean> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      DELETE FROM member_users WHERE member_id = ${memberId} RETURNING member_id
+    `;
+    return rows.length > 0;
+  });
+}
+
+export async function changeMemberPassword(
+  memberId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT password FROM member_users WHERE member_id = ${memberId} LIMIT 1
+    `;
+    if (rows.length === 0) return { ok: false, error: "ไม่พบบัญชีสมาชิก" };
+
+    const stored = rows[0].password as string;
+    if (!(await verifyPassword(currentPassword, stored))) {
+      return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+    }
+    if (await verifyPassword(newPassword, stored)) {
+      return { ok: false, error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม" };
+    }
+
+    const hashed = await hashPassword(newPassword);
+    await sql`
+      UPDATE member_users
+      SET password = ${hashed}, must_change_password = FALSE
+      WHERE member_id = ${memberId}
+    `;
+    return { ok: true };
+  });
+}
+
+export async function loadMemberPortalData(
+  memberId: string
+): Promise<MemberPortalData | null> {
+  return withDb(async (sql) => {
+    const memberRows = await sql`
+      SELECT id, name, email, phone, package_id, joined_at, expires_at, status
+      FROM members WHERE id = ${memberId} LIMIT 1
+    `;
+    if (memberRows.length === 0) return null;
+    const m = memberRows[0];
+
+    const [packageRows, bookingRows] = await Promise.all([
+      sql`
+        SELECT name, price, duration_days, features
+        FROM membership_packages WHERE id = ${m.package_id as string} LIMIT 1
+      `,
+      sql`
+        SELECT id, type, resource_name, date, time, status
+        FROM bookings WHERE member_id = ${memberId}
+        ORDER BY date DESC, time DESC
+      `,
+    ]);
+
+    return {
+      member: {
+        id: m.id as string,
+        name: m.name as string,
+        email: m.email as string,
+        phone: m.phone as string,
+        joinedAt: String(m.joined_at).slice(0, 10),
+        expiresAt: String(m.expires_at).slice(0, 10),
+        status: m.status as string,
+      },
+      package:
+        packageRows.length > 0
+          ? {
+              name: packageRows[0].name as string,
+              price: Number(packageRows[0].price),
+              durationDays: Number(packageRows[0].duration_days),
+              features: packageRows[0].features as string[],
+            }
+          : null,
+      bookings: bookingRows.map((b) => ({
+        id: b.id as string,
+        type: b.type as string,
+        resourceName: b.resource_name as string,
+        date: String(b.date).slice(0, 10),
+        time: b.time as string,
+        status: b.status as string,
+      })),
+    };
+  });
+}

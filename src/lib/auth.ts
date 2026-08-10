@@ -16,7 +16,21 @@ export interface VerifiedSession extends SessionPayload {
   issuedAt: number;
 }
 
+export interface MemberSessionPayload {
+  memberId: string;
+  email: string;
+  name: string;
+  mustChangePassword: boolean;
+  maxAge: number;
+}
+
+export interface VerifiedMemberSession extends MemberSessionPayload {
+  expiresAt: number;
+}
+
 export const SESSION_COOKIE = "liftlab_session";
+/** สมาชิกใช้ cookie คนละใบกับพนักงาน เพื่อไม่ให้ session ทั้งสองฝั่งทับกัน */
+export const MEMBER_SESSION_COOKIE = "liftlab_member_session";
 
 export const SESSION_MAX_AGE = 60 * 60 * 24; // 1 วัน
 export const SESSION_MAX_AGE_REMEMBERED = 60 * 60 * 24 * 30; // 30 วัน
@@ -46,6 +60,8 @@ export async function verifySession(
 ): Promise<VerifiedSession | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
+    // token ของสมาชิกต้องใช้เข้าหลังบ้านไม่ได้
+    if (payload.scope === "member") return null;
     const maxAge = Number(payload.maxAge) || SESSION_MAX_AGE;
     return {
       id: payload.id as string,
@@ -56,6 +72,36 @@ export async function verifySession(
       maxAge,
       expiresAt: Number(payload.exp ?? 0),
       issuedAt: Number(payload.iat ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function createMemberSession(
+  payload: MemberSessionPayload
+): Promise<string> {
+  return new SignJWT({ ...payload, scope: "member" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${payload.maxAge}s`)
+    .sign(getSecret());
+}
+
+export async function verifyMemberSession(
+  token: string
+): Promise<VerifiedMemberSession | null> {
+  try {
+    const { payload } = await jwtVerify(token, getSecret());
+    // token ของพนักงานต้องใช้กับ portal ไม่ได้ แม้จะเซ็นด้วย secret เดียวกัน
+    if (payload.scope !== "member") return null;
+    return {
+      memberId: payload.memberId as string,
+      email: payload.email as string,
+      name: payload.name as string,
+      mustChangePassword: Boolean(payload.mustChangePassword),
+      maxAge: Number(payload.maxAge) || SESSION_MAX_AGE,
+      expiresAt: Number(payload.exp ?? 0),
     };
   } catch {
     return null;

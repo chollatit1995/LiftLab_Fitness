@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
@@ -59,15 +59,77 @@ export default function MembersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [role, setRole] = useState("");
+  const [portalMemberIds, setPortalMemberIds] = useState<string[]>([]);
+  const [accessTarget, setAccessTarget] = useState<Member | null>(null);
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessError, setAccessError] = useState("");
+  const [accessMessage, setAccessMessage] = useState("");
+
+  const loadPortalAccounts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/members/access");
+      if (res.ok) {
+        const accounts: { memberId: string }[] = await res.json();
+        setPortalMemberIds(accounts.map((a) => a.memberId));
+      }
+    } catch {
+      setPortalMemberIds([]);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then((d) => setRole(d.user?.role ?? ""))
       .catch(() => setRole(""));
-  }, []);
+    loadPortalAccounts();
+  }, [loadPortalAccounts]);
 
   const canDelete = can(role, "members.delete");
+  const canGrantAccess = can(role, "members.grantAccess");
+
+  const openAccess = (member: Member) => {
+    setAccessTarget(member);
+    setAccessPassword("");
+    setAccessError("");
+    setAccessMessage("");
+  };
+
+  const handleGrantAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessTarget) return;
+
+    setAccessSaving(true);
+    setAccessError("");
+
+    try {
+      const res = await fetch("/api/members/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: accessTarget.id,
+          email: accessTarget.email,
+          password: accessPassword,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        setAccessError(json.error || "ตั้งรหัสผ่านไม่สำเร็จ");
+        return;
+      }
+
+      setAccessMessage(
+        `ตั้งรหัสผ่านให้ ${accessTarget.name} แล้ว — แจ้งรหัสนี้ให้สมาชิกเข้าที่หน้า /portal/login`
+      );
+      await loadPortalAccounts();
+    } catch {
+      setAccessError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setAccessSaving(false);
+    }
+  };
 
   const activePackages = data.packages.filter((p) => p.status === "active");
 
@@ -412,6 +474,28 @@ export default function MembersPage() {
                               autorenew
                             </span>
                           </button>
+                          {canGrantAccess && (
+                            <button
+                              type="button"
+                              onClick={() => openAccess(member)}
+                              title={
+                                portalMemberIds.includes(member.id)
+                                  ? "รีเซ็ตรหัสผ่าน portal"
+                                  : "เปิดใช้งาน portal"
+                              }
+                              className={`rounded-lg p-1.5 hover:bg-blue-50 hover:text-blue-600 ${
+                                portalMemberIds.includes(member.id)
+                                  ? "text-blue-500"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                {portalMemberIds.includes(member.id)
+                                  ? "key"
+                                  : "key_off"}
+                              </span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openEdit(member)}
@@ -535,6 +619,87 @@ export default function MembersPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={accessTarget !== null}
+        onClose={() => setAccessTarget(null)}
+        title={
+          accessTarget && portalMemberIds.includes(accessTarget.id)
+            ? "รีเซ็ตรหัสผ่าน Portal"
+            : "เปิดใช้งาน Member Portal"
+        }
+        subtitle="Member Portal Access"
+      >
+        {accessTarget && (
+          <form onSubmit={handleGrantAccess} className="space-y-4">
+            {accessError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {accessError}
+              </div>
+            )}
+            {accessMessage ? (
+              <>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {accessMessage}
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  onClick={() => setAccessTarget(null)}
+                >
+                  เสร็จสิ้น
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl bg-slate-50 px-4 py-3">
+                  <p className="font-medium text-slate-900">
+                    {accessTarget.name}
+                  </p>
+                  <p className="text-xs text-slate-500">{accessTarget.email}</p>
+                </div>
+
+                <div>
+                  <label className="label-field">
+                    รหัสผ่านชั่วคราว / Temporary Password
+                  </label>
+                  <input
+                    className="input-field"
+                    value={accessPassword}
+                    onChange={(e) => setAccessPassword(e.target.value)}
+                    required
+                  />
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    อย่างน้อย 8 ตัวอักษร มีทั้งตัวอักษรและตัวเลข — สมาชิกจะต้องเปลี่ยนรหัสเองเมื่อเข้าครั้งแรก
+                  </p>
+                </div>
+
+                <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  สมาชิกเข้าใช้งานที่ <span className="font-medium">/portal/login</span>{" "}
+                  เพื่อดูแพ็กเกจ วันหมดอายุ และตารางการจองของตัวเอง
+                </p>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={accessSaving}
+                    className="btn-primary flex-1 disabled:opacity-60"
+                  >
+                    {accessSaving ? "กำลังบันทึก..." : "บันทึกรหัสผ่าน"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setAccessTarget(null)}
+                  >
+                    ยกเลิก
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+        )}
       </Modal>
 
       <Modal

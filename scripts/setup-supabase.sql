@@ -91,6 +91,19 @@ ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT 
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS staff_id TEXT;
+
+-- บัญชี login ของสมาชิก (แยกจากตาราง members เพราะ members ถูกเขียนใหม่ทุกครั้งที่บันทึกข้อมูล)
+CREATE TABLE IF NOT EXISTS member_users (
+  member_id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,
+  must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ========== ผู้ใช้งานระบบ ==========
 

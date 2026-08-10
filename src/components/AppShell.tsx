@@ -13,6 +13,9 @@ interface User {
 
 const BARE_LAYOUT_PATHS = ["/login", "/change-password"];
 
+/** portal ของสมาชิกมี layout ของตัวเอง ไม่ใช้ sidebar หลังบ้าน */
+const BARE_LAYOUT_PREFIXES = ["/portal"];
+
 /** เตือนผู้ใช้ก่อน session หมดอายุ (วินาที) */
 const EXPIRY_WARNING_SECONDS = 5 * 60;
 
@@ -36,7 +39,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isBareLayout = BARE_LAYOUT_PATHS.includes(pathname);
+  const isBareLayout =
+    BARE_LAYOUT_PATHS.includes(pathname) ||
+    BARE_LAYOUT_PREFIXES.some((p) => pathname.startsWith(p));
 
   const loadSession = useCallback(async () => {
     try {

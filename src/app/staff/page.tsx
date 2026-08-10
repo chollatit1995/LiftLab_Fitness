@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
 import { useData } from "@/lib/data-context";
 import { generateId, roleLabels, statusColors } from "@/lib/store";
+import { can } from "@/lib/permissions";
 import { Staff, StaffRole } from "@/lib/types";
 
 const emptyForm = {
@@ -21,6 +22,79 @@ export default function StaffPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+
+  const [role, setRole] = useState("");
+  const [accountStaffIds, setAccountStaffIds] = useState<string[]>([]);
+  const [accessTarget, setAccessTarget] = useState<Staff | null>(null);
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessError, setAccessError] = useState("");
+  const [accessMessage, setAccessMessage] = useState("");
+
+  const canGrantAccess = can(role, "staff.grantAccess");
+
+  const loadAccounts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/staff/access");
+      if (res.ok) {
+        const json = await res.json();
+        setAccountStaffIds(json.staffIds ?? []);
+      }
+    } catch {
+      setAccountStaffIds([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setRole(d.user?.role ?? ""))
+      .catch(() => setRole(""));
+    loadAccounts();
+  }, [loadAccounts]);
+
+  const openAccess = (staff: Staff) => {
+    setAccessTarget(staff);
+    setAccessPassword("");
+    setAccessError("");
+    setAccessMessage("");
+  };
+
+  const handleGrantAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessTarget) return;
+
+    setAccessSaving(true);
+    setAccessError("");
+
+    try {
+      const res = await fetch("/api/staff/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: accessTarget.id,
+          email: accessTarget.email,
+          name: accessTarget.name,
+          password: accessPassword,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        setAccessError(json.error || "สร้างบัญชีไม่สำเร็จ");
+        return;
+      }
+
+      setAccessMessage(
+        `สร้างบัญชีให้ ${accessTarget.name} แล้ว — แจ้งรหัสผ่านนี้ให้เจ้าตัวและให้เปลี่ยนเมื่อ login ครั้งแรก`
+      );
+      await loadAccounts();
+    } catch {
+      setAccessError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setAccessSaving(false);
+    }
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -163,6 +237,27 @@ export default function StaffPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex gap-1">
+                      {canGrantAccess &&
+                        (accountStaffIds.includes(staff.id) ? (
+                          <span
+                            title="มีบัญชีเข้าระบบแล้ว"
+                            className="rounded-lg p-1.5 text-emerald-500"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              key
+                            </span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => openAccess(staff)}
+                            title="สร้างบัญชีเข้าระบบ"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              key_off
+                            </span>
+                          </button>
+                        ))}
                       <button
                         onClick={() => openEdit(staff)}
                         className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
@@ -187,6 +282,83 @@ export default function StaffPage() {
           </table>
         </div>
       </div>
+
+      <Modal
+        open={accessTarget !== null}
+        onClose={() => setAccessTarget(null)}
+        title="สร้างบัญชีเข้าระบบ"
+        subtitle="Grant System Access"
+      >
+        {accessTarget && (
+          <form onSubmit={handleGrantAccess} className="space-y-4">
+            {accessError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {accessError}
+              </div>
+            )}
+            {accessMessage ? (
+              <>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {accessMessage}
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  onClick={() => setAccessTarget(null)}
+                >
+                  เสร็จสิ้น
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl bg-slate-50 px-4 py-3">
+                  <p className="font-medium text-slate-900">
+                    {accessTarget.name}
+                  </p>
+                  <p className="text-xs text-slate-500">{accessTarget.email}</p>
+                </div>
+
+                <div>
+                  <label className="label-field">
+                    รหัสผ่านชั่วคราว / Temporary Password
+                  </label>
+                  <input
+                    className="input-field"
+                    value={accessPassword}
+                    onChange={(e) => setAccessPassword(e.target.value)}
+                    required
+                  />
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    อย่างน้อย 8 ตัวอักษร มีทั้งตัวอักษรและตัวเลข — ระบบจะบังคับให้เจ้าตัวเปลี่ยนเมื่อ login ครั้งแรก
+                  </p>
+                </div>
+
+                <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-700">
+                  บัญชีที่สร้างจะได้สิทธิ์ระดับ &quot;พนักงาน&quot; เท่านั้น
+                  หากต้องการสิทธิ์สูงกว่านี้ ให้ผู้ดูแลระบบปรับที่หน้าผู้ใช้งานระบบ
+                </p>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={accessSaving}
+                    className="btn-primary flex-1 disabled:opacity-60"
+                  >
+                    {accessSaving ? "กำลังสร้าง..." : "สร้างบัญชี"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setAccessTarget(null)}
+                  >
+                    ยกเลิก
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+        )}
+      </Modal>
 
       <Modal
         open={modalOpen}

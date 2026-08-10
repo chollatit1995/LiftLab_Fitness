@@ -19,6 +19,19 @@ ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT 
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS staff_id TEXT;
+
+-- บัญชี login ของสมาชิก สำหรับ Member Portal
+CREATE TABLE IF NOT EXISTS member_users (
+  member_id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,
+  must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- บัญชีเริ่มต้น (รหัสผ่านจะถูกแปลงเป็น bcrypt hash อัตโนมัติในการ login ครั้งแรก)
 INSERT INTO app_users (id, email, password, name, role, status, must_change_password) VALUES
