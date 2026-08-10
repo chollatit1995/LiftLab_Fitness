@@ -59,6 +59,7 @@ export default function PortalBookPage() {
   const [success, setSuccess] = useState("");
 
   const dates = useMemo(() => upcomingDates(14), []);
+  const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
 
   const load = useCallback(async () => {
     try {
@@ -225,8 +226,6 @@ export default function PortalBookPage() {
       </div>
     );
   }
-
-  const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
 
   const classMeta = bookingTypeMeta("class");
   const trainerMeta = bookingTypeMeta("trainer");
