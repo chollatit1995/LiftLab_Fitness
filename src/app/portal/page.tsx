@@ -8,7 +8,6 @@ import { daysUntil } from "@/lib/dates";
 import { formatCurrency, formatDate, statusColors } from "@/lib/store";
 import { MembershipPackage, Promotion } from "@/lib/types";
 import {
-  bestOfferFor,
   daysLeft,
   discountBadge,
   livePromotions,
@@ -599,17 +598,17 @@ export default function PortalPage() {
               </section>
             )}
 
-            {/* Promotions */}
+            {/* Promotions — แสดงข้อมูลเท่านั้น ใช้สิทธิ์ที่เคาน์เตอร์เมื่อต่ออายุ/สมัคร */}
             {promotions.length > 0 && (
               <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
                   <SectionHeader
                     icon="local_offer"
-                    title="โปรโมชั่นสำหรับคุณ"
+                    title="โปรโมชั่น"
                     subtitle={
                       myPromotions.length > 0
-                        ? `${myPromotions.length} โปรใช้ได้กับแพ็กเกจของคุณ`
-                        : "โปรที่กำลังเปิดอยู่ทั้งหมด"
+                        ? `${myPromotions.length} โปรที่อาจใช้ได้กับแพ็กเกจของคุณ · สอบถามที่เคาน์เตอร์`
+                        : "โปรที่กำลังเปิดอยู่ · สอบถามและใช้สิทธิ์ได้ที่เคาน์เตอร์"
                     }
                     accent="rose"
                   />
@@ -640,21 +639,16 @@ export default function PortalPage() {
                                 {promo.title}
                               </p>
                               {usable && (
-                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                  ใช้ได้
+                                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                                  ใช้ได้ที่เคาน์เตอร์
                                 </span>
                               )}
                             </div>
                             <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
                               {promo.description}
                             </p>
-                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                              {promo.code && (
-                                <span className="rounded-lg border border-dashed border-rose-300 bg-white px-2.5 py-1 font-mono text-sm font-bold tracking-wide text-rose-700">
-                                  {promo.code}
-                                </span>
-                              )}
-                              <span className="text-slate-400">
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                              <span>
                                 ถึง {formatDate(promo.endDate)}
                                 {left >= 0 && left <= 14 && ` · เหลือ ${left} วัน`}
                               </span>
@@ -667,6 +661,9 @@ export default function PortalPage() {
                       </div>
                     );
                   })}
+                  <p className="px-1 text-center text-[11px] leading-relaxed text-slate-400">
+                    การต่ออายุและใช้โปรโมชั่นทำได้ที่เคาน์เตอร์ LiftLab เท่านั้น
+                  </p>
                 </div>
               </section>
             )}
@@ -737,14 +734,11 @@ export default function PortalPage() {
                   <SectionHeader
                     icon="card_membership"
                     title="แพ็กเกจอื่น"
-                    subtitle="ราคาหลังหักโปรแล้ว"
+                    subtitle="ราคามาตรฐาน · สอบถามโปรที่เคาน์เตอร์"
                   />
                 </div>
                 <div className="space-y-3 p-4">
-                  {otherPackages.map((pkg) => {
-                    const offer = bestOfferFor(pkg, promotions);
-
-                    return (
+                  {otherPackages.map((pkg) => (
                       <div
                         key={pkg.id}
                         className={`rounded-xl border p-4 transition hover:shadow-md ${
@@ -764,27 +758,15 @@ export default function PortalPage() {
                         <p className="mt-0.5 text-xs text-slate-500">
                           {pkg.durationDays} วัน
                         </p>
-                        <div className="mt-2 flex items-baseline gap-2">
-                          {offer ? (
-                            <>
-                              <span className="text-xl font-bold text-rose-600">
-                                {formatCurrency(offer.price)}
-                              </span>
-                              <span className="text-sm text-slate-400 line-through">
-                                {formatCurrency(pkg.price)}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-xl font-bold text-slate-900">
-                              {formatCurrency(pkg.price)}
-                            </span>
-                          )}
+                        <div className="mt-2">
+                          <span className="text-xl font-bold text-slate-900">
+                            {formatCurrency(pkg.price)}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
+                    ))}
                   <p className="px-1 text-center text-[11px] text-slate-400">
-                    สนใจแจ้งที่เคาน์เตอร์
+                    สนใจเปลี่ยนแพ็กเกจหรือต่ออายุ แจ้งที่เคาน์เตอร์
                   </p>
                 </div>
               </section>
