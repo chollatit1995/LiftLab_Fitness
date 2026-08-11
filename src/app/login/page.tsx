@@ -3,18 +3,31 @@
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
+import {
+  ENGLISH_NAME_HINT,
+  filterEnglishNameInput,
+} from "@/lib/name";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/";
 
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handleLoginChange = (value: string) => {
+    // อีเมลยังใส่ได้; ชื่อต้องเป็นอังกฤษเท่านั้น
+    if (value.includes("@")) {
+      setLogin(value);
+      return;
+    }
+    setLogin(filterEnglishNameInput(value));
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,7 +38,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, rememberMe }),
+        body: JSON.stringify({ login, password, rememberMe }),
       });
 
       const data = await res.json();
@@ -66,7 +79,7 @@ function LoginForm() {
 
         <div className="relative">
           <div className="flex items-center gap-3">
-            <BrandLogo size="xl" className="ring-2 ring-white/30" priority />
+            <BrandLogo size={48} priority className="ring-2 ring-white/30 shadow-lg" />
             <div>
               <p className="text-xl font-bold text-white">LiftLab Fitness</p>
               <p className="text-sm text-white/70">ระบบบริหารจัดการฟิตเนส</p>
@@ -108,7 +121,7 @@ function LoginForm() {
       <div className="flex w-full flex-col items-center justify-center bg-slate-50 px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <BrandLogo size="lg" priority />
+            <BrandLogo size={44} priority />
             <div>
               <p className="text-lg font-bold text-slate-900">LiftLab Fitness</p>
               <p className="text-xs text-slate-500">ระบบบริหารจัดการฟิตเนส</p>
@@ -133,21 +146,25 @@ function LoginForm() {
             )}
 
             <div>
-              <label className="label-field">อีเมล / Email</label>
+              <label className="label-field">ชื่อ / Name</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
-                  mail
+                  person
                 </span>
                 <input
-                  type="email"
+                  type="text"
                   className="input-field pl-10"
-                  placeholder="admin@liftlab.fitness"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Admin"
+                  value={login}
+                  onChange={(e) => handleLoginChange(e.target.value)}
                   required
-                  autoComplete="email"
+                  autoComplete="username"
+                  lang="en"
                 />
               </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {ENGLISH_NAME_HINT} — เช่น Admin / Manager
+              </p>
             </div>
 
             <div>

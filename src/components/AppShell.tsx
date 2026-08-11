@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { BrandLogo } from "@/components/BrandLogo";
 import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
 
@@ -37,6 +37,7 @@ function pageTitle(pathname: string): string {
     "/classes": "คลาส & แพ็กเกจ",
     "/staff": "พนักงาน",
     "/promotions/manage": "โปรโมชั่น",
+    "/reports": "รายงาน",
     "/users": "ผู้ใช้งาน",
     "/profile": "โปรไฟล์",
   };
@@ -168,7 +169,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Logo */}
       <div className="border-b border-white/10 px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
-          <BrandLogo size="lg" className="shadow-lg shadow-brand-900/40" priority />
+          <BrandLogo size={44} priority className="shadow-lg shadow-black/30 ring-white/20" />
           <div className="min-w-0">
             <p className="truncate text-base font-bold text-white">LiftLab Fitness</p>
             <p className="truncate text-[11px] font-medium uppercase tracking-wider text-emerald-300/80">
@@ -393,7 +394,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <footer className="relative border-t border-slate-200/60 bg-white/60 py-6 backdrop-blur-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-center gap-1 px-4 text-center sm:px-6">
             <div className="flex items-center gap-2">
-              <BrandLogo size="sm" />
+              <BrandLogo size={28} />
               <span className="text-sm font-semibold text-slate-700">LiftLab Fitness</span>
             </div>
             <p className="text-xs text-slate-400">

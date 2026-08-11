@@ -6,6 +6,13 @@ import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
 import { AppUser, AppUserRole } from "@/lib/user-types";
 import { statusColors } from "@/lib/store";
+import {
+  ENGLISH_NAME_ERROR,
+  ENGLISH_NAME_HINT,
+  ENGLISH_NAME_PATTERN,
+  englishNameOrError,
+  filterEnglishNameInput,
+} from "@/lib/name";
 
 const userRoleLabels: Record<AppUserRole, string> = {
   admin: "ผู้ดูแลระบบ",
@@ -76,18 +83,26 @@ export default function UsersPage() {
     e.preventDefault();
     setError("");
 
+    const checkedName = englishNameOrError(form.name);
+    if (!checkedName.ok) {
+      setError(checkedName.error);
+      return;
+    }
+
     if (!editingId && !form.password) {
       setError("กรุณาตั้งรหัสผ่าน");
       return;
     }
+
+    const payload = { ...form, name: checkedName.name };
 
     const res = await fetch("/api/users", {
       method: editingId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         editingId
-          ? { id: editingId, ...form, password: form.password || undefined }
-          : form
+          ? { id: editingId, ...payload, password: payload.password || undefined }
+          : payload
       ),
     });
 
@@ -245,9 +260,17 @@ export default function UsersPage() {
             <input
               className="input-field"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, name: filterEnglishNameInput(e.target.value) })
+              }
+              placeholder="Somchai Jaidee"
+              pattern={ENGLISH_NAME_PATTERN}
+              title={ENGLISH_NAME_ERROR}
+              lang="en"
+              autoComplete="name"
               required
             />
+            <p className="mt-1 text-xs text-slate-400">{ENGLISH_NAME_HINT}</p>
           </div>
 
           <div>

@@ -1,35 +1,26 @@
 import Image from "next/image";
-
-const PRESET = {
-  sm: 24,
-  md: 40,
-  lg: 44,
-  xl: 48,
-} as const;
-
-type BrandLogoSize = keyof typeof PRESET | number;
+import logo from "@/assets/logo.png";
 
 interface BrandLogoProps {
-  size?: BrandLogoSize;
+  /** ขนาดแสดงผลเป็นพิกเซล — แนะนำ 40–48 สำหรับหัวเว็บ */
+  size?: number;
   className?: string;
   priority?: boolean;
 }
 
 export function BrandLogo({
-  size = "lg",
+  size = 44,
   className = "",
   priority = false,
 }: BrandLogoProps) {
-  const px = typeof size === "number" ? size : PRESET[size];
-
   return (
     <Image
-      src="/liftlab-logo.png"
+      src={logo}
       alt="LiftLab Fitness"
-      width={px}
-      height={px}
+      width={size}
+      height={size}
+      className={`shrink-0 rounded-full object-contain ${className}`}
       priority={priority}
-      className={`shrink-0 rounded-full object-cover ${className}`}
     />
   );
 }

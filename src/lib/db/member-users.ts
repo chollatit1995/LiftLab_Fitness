@@ -23,7 +23,8 @@ export interface AuthenticatedMember {
 export type MemberLoginResult =
   | { ok: true; member: AuthenticatedMember }
   | { ok: false; reason: "invalid" }
-  | { ok: false; reason: "locked"; minutesLeft: number };
+  | { ok: false; reason: "locked"; minutesLeft: number }
+  | { ok: false; reason: "ambiguous" };
 
 export interface MemberPortalData {
   member: {
@@ -58,21 +59,39 @@ export interface MemberPortalData {
   packages: MembershipPackage[];
 }
 
+function normalizeLogin(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** login ด้วยชื่อสมาชิก (หลัก) หรืออีเมลบัญชี (รองรับของเดิม) */
 export async function authenticateMember(
-  email: string,
+  login: string,
   password: string
 ): Promise<MemberLoginResult> {
   return withDb(async (sql) => {
-    const rows = await sql`
-      SELECT mu.member_id, mu.email, mu.password, mu.must_change_password,
-             mu.failed_attempts, mu.locked_until, m.name
-      FROM member_users mu
-      JOIN members m ON m.id = mu.member_id
-      WHERE LOWER(TRIM(mu.email)) = ${email.trim().toLowerCase()}
-      LIMIT 1
-    `;
+    const normalized = normalizeLogin(login);
+    const byEmail = normalized.includes("@");
+
+    const rows = byEmail
+      ? await sql`
+          SELECT mu.member_id, mu.email, mu.password, mu.must_change_password,
+                 mu.failed_attempts, mu.locked_until, m.name
+          FROM member_users mu
+          JOIN members m ON m.id = mu.member_id
+          WHERE LOWER(TRIM(mu.email)) = ${normalized}
+          LIMIT 2
+        `
+      : await sql`
+          SELECT mu.member_id, mu.email, mu.password, mu.must_change_password,
+                 mu.failed_attempts, mu.locked_until, m.name
+          FROM member_users mu
+          JOIN members m ON m.id = mu.member_id
+          WHERE LOWER(TRIM(REGEXP_REPLACE(m.name, '\\s+', ' ', 'g'))) = ${normalized}
+          LIMIT 2
+        `;
 
     if (rows.length === 0) return { ok: false, reason: "invalid" };
+    if (rows.length > 1) return { ok: false, reason: "ambiguous" };
 
     const row = rows[0];
     const lockedUntil = row.locked_until

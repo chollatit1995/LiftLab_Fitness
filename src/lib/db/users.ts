@@ -17,7 +17,8 @@ export interface AuthenticatedUser {
 export type LoginResult =
   | { ok: true; user: AuthenticatedUser }
   | { ok: false; reason: "invalid"; remainingAttempts: number | null }
-  | { ok: false; reason: "locked"; minutesLeft: number };
+  | { ok: false; reason: "locked"; minutesLeft: number }
+  | { ok: false; reason: "ambiguous" };
 
 function mapUser(row: Record<string, unknown>): AppUser {
   return {
@@ -32,22 +33,43 @@ function mapUser(row: Record<string, unknown>): AppUser {
   };
 }
 
+function normalizeLogin(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** login ด้วยชื่อ (หลัก) หรืออีเมล (รองรับบัญชีเดิม) */
 export async function authenticate(
-  email: string,
+  login: string,
   password: string
 ): Promise<LoginResult> {
   return withDb(async (sql) => {
-    const rows = await sql`
-      SELECT id, email, name, role, password, must_change_password,
-             failed_attempts, locked_until
-      FROM app_users
-      WHERE LOWER(TRIM(email)) = ${email.trim().toLowerCase()}
-        AND status = 'active'
-      LIMIT 1
-    `;
+    const normalized = normalizeLogin(login);
+    const byEmail = normalized.includes("@");
+
+    const rows = byEmail
+      ? await sql`
+          SELECT id, email, name, role, password, must_change_password,
+                 failed_attempts, locked_until
+          FROM app_users
+          WHERE LOWER(TRIM(email)) = ${normalized}
+            AND status = 'active'
+          LIMIT 2
+        `
+      : await sql`
+          SELECT id, email, name, role, password, must_change_password,
+                 failed_attempts, locked_until
+          FROM app_users
+          WHERE LOWER(TRIM(REGEXP_REPLACE(name, '\\s+', ' ', 'g'))) = ${normalized}
+            AND status = 'active'
+          LIMIT 2
+        `;
 
     if (rows.length === 0) {
       return { ok: false, reason: "invalid", remainingAttempts: null };
+    }
+
+    if (rows.length > 1) {
+      return { ok: false, reason: "ambiguous" };
     }
 
     const row = rows[0];
@@ -325,13 +347,13 @@ export async function seedDefaultUsers(): Promise<void> {
     {
       id: "u1",
       email: "admin@liftlab.fitness",
-      name: "ผู้ดูแลระบบ",
+      name: "Admin",
       role: "admin" as AppUserRole,
     },
     {
       id: "u2",
       email: "manager@liftlab.fitness",
-      name: "ผู้จัดการ",
+      name: "Manager",
       role: "manager" as AppUserRole,
     },
   ];

@@ -12,6 +12,14 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "LiftLab Fitness — ระบบจัดการฟิตเนส",
   description: "ระบบบริหารจัดการฟิตเนสครบวงจร สำหรับ LiftLab Fitness",
+  icons: {
+    icon: [
+      { url: "/logo.png?v=3", type: "image/png", sizes: "512x512" },
+      { url: "/icon.png?v=3", type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: "/logo.png?v=3",
+    apple: [{ url: "/apple-icon.png?v=3", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({

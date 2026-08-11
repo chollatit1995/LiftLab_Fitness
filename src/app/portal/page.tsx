@@ -322,7 +322,7 @@ export default function PortalPage() {
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <BrandLogo size="md" className="shadow-md shadow-brand-600/20" priority />
+            <BrandLogo size={44} priority />
             <div>
               <p className="text-base font-bold tracking-tight text-slate-900">
                 LiftLab Fitness
@@ -689,11 +689,6 @@ export default function PortalPage() {
                             : "border-slate-100 bg-slate-50/50"
                         }`}
                       >
-                        {promo.highlight && (
-                          <div className="absolute right-0 top-0 rounded-bl-xl bg-rose-500 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                            แนะนำ
-                          </div>
-                        )}
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -849,7 +844,7 @@ export default function PortalPage() {
       <footer className="relative border-t border-slate-200/60 bg-white/60 py-8 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl px-4 text-center sm:px-6">
           <div className="mb-2 flex items-center justify-center gap-2">
-            <BrandLogo size={28} />
+            <BrandLogo size={32} />
             <span className="text-sm font-semibold text-slate-700">
               LiftLab Fitness
             </span>

@@ -14,7 +14,6 @@ import {
   groupDatesByMonth,
   isSlotInPast,
   isTrainerSlotTaken,
-  memberAlreadyBooked,
   slotsForType,
   upcomingDates,
   weekdayLabel,
@@ -31,17 +30,41 @@ import { hasSessionQuota } from "@/lib/sessions";
 import { todayISO } from "@/lib/dates";
 
 type WizardStep = "type" | "resource" | "datetime" | "member" | "confirm";
+type StatusFilter = "all" | "confirmed" | "completed" | "cancelled";
 
-const tabs: { key: BookingType | "all"; label: string }[] = [
+const typeTabs: { key: BookingType | "all"; label: string }[] = [
   { key: "all", label: "ทั้งหมด" },
   { key: "class", label: "คลาส" },
-  { key: "trainer", label: "เทรนเนอร์" },
+  { key: "trainer", label: "PT" },
   { key: "facility", label: "พื้นที่" },
 ];
+
+const statusTabs: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "ทุกสถานะ" },
+  { key: "confirmed", label: "ยืนยันแล้ว" },
+  { key: "completed", label: "เสร็จสิ้น" },
+  { key: "cancelled", label: "ยกเลิก" },
+];
+
+const statusLabel: Record<Booking["status"], string> = {
+  confirmed: "ยืนยันแล้ว",
+  cancelled: "ยกเลิก",
+  completed: "เสร็จสิ้น",
+};
+
+function dateHeading(date: string, today: string): string {
+  if (date === today) return "วันนี้";
+  const tomorrow = new Date(today + "T12:00:00");
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (date === tomorrow.toISOString().slice(0, 10)) return "พรุ่งนี้";
+  return formatDate(date);
+}
 
 export default function BookingsPage() {
   const { data, updateData, hydrated } = useData();
   const [tab, setTab] = useState<BookingType | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("confirmed");
+  const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>("type");
   const [bookingType, setBookingType] = useState<BookingType>("class");
@@ -63,11 +86,39 @@ export default function BookingsPage() {
       today: todayBookings.length,
       class: todayBookings.filter((b) => b.type === "class").length,
       trainer: todayBookings.filter((b) => b.type === "trainer").length,
+      facility: todayBookings.filter((b) => b.type === "facility").length,
     };
   }, [data.bookings, today]);
 
-  const filtered =
-    tab === "all" ? data.bookings : data.bookings.filter((b) => b.type === tab);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return data.bookings.filter((b) => {
+      if (tab !== "all" && b.type !== tab) return false;
+      if (statusFilter !== "all" && b.status !== statusFilter) return false;
+      if (!q) return true;
+      const member = data.members.find((m) => m.id === b.memberId);
+      return (
+        b.resourceName.toLowerCase().includes(q) ||
+        (member?.name ?? "").toLowerCase().includes(q) ||
+        b.time.includes(q) ||
+        b.date.includes(q)
+      );
+    });
+  }, [data.bookings, data.members, tab, statusFilter, query]);
+
+  const grouped = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.time.localeCompare(b.time);
+    });
+    const map = new Map<string, Booking[]>();
+    for (const booking of sorted) {
+      const list = map.get(booking.date) ?? [];
+      list.push(booking);
+      map.set(booking.date, list);
+    }
+    return [...map.entries()];
+  }, [filtered]);
 
   const activeClasses = data.classes.filter((c) => c.status === "active");
   const activeTrainers = data.staff.filter(
@@ -96,8 +147,12 @@ export default function BookingsPage() {
     setNotes("");
   };
 
-  const openWizard = () => {
+  const openWizard = (type?: BookingType) => {
     resetWizard();
+    if (type) {
+      setBookingType(type);
+      setStep("resource");
+    }
     setModalOpen(true);
   };
 
@@ -159,6 +214,7 @@ export default function BookingsPage() {
 
     setModalOpen(false);
     resetWizard();
+    setStatusFilter("confirmed");
   };
 
   const cancelBooking = (id: string) => {
@@ -212,213 +268,211 @@ export default function BookingsPage() {
   return (
     <div>
       <PageHeader
-        titleTh="ระบบจองคลาส & เทรนเนอร์"
-        titleEn="Class & Trainer Booking"
-        descriptionTh="จองคลาสกลุ่ม Personal Training และพื้นที่ใช้งาน"
-        descriptionEn="Book group classes, PT sessions, and facilities"
+        icon="calendar_month"
+        titleTh="การจอง"
+        titleEn="Bookings"
+        descriptionTh="ดูตารางจองตามวัน และสร้างการจองคลาส PT หรือพื้นที่"
         action={
-          <button className="btn-primary" onClick={openWizard}>
+          <button className="btn-primary" onClick={() => openWizard()}>
             <span className="material-symbols-outlined text-[18px]">add</span>
             สร้างการจอง
           </button>
         }
       />
 
-      {/* Stats */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        {[
-          {
-            icon: "today",
-            label: "จองวันนี้",
-            value: stats.today,
-            gradient: "from-brand-600 to-emerald-500",
-          },
-          {
-            icon: "fitness_center",
-            label: "คลาสวันนี้",
-            value: stats.class,
-            gradient: "from-violet-500 to-purple-600",
-          },
-          {
-            icon: "person",
-            label: "PT วันนี้",
-            value: stats.trainer,
-            gradient: "from-sky-500 to-blue-600",
-          },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="card flex items-center gap-4 overflow-hidden p-5"
-          >
-            <div
-              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${stat.gradient} text-white shadow-md`}
+      {/* Compact today strip */}
+      <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm shadow-sm shadow-slate-200/40">
+        <div className="flex items-center gap-2 text-slate-700">
+          <span className="material-symbols-outlined text-[18px] text-brand-600">
+            today
+          </span>
+          <span className="font-medium">วันนี้</span>
+          <span className="rounded-lg bg-brand-50 px-2 py-0.5 text-sm font-bold text-brand-700">
+            {stats.today}
+          </span>
+        </div>
+        <div className="hidden h-4 w-px bg-slate-200 sm:block" />
+        <div className="flex flex-wrap gap-4 text-slate-500">
+          <span>
+            คลาส <strong className="font-semibold text-slate-800">{stats.class}</strong>
+          </span>
+          <span>
+            PT <strong className="font-semibold text-slate-800">{stats.trainer}</strong>
+          </span>
+          <span>
+            พื้นที่{" "}
+            <strong className="font-semibold text-slate-800">{stats.facility}</strong>
+          </span>
+        </div>
+        <div className="ml-auto flex flex-wrap gap-2">
+          {(
+            [
+              { type: "class" as const, label: "จองคลาส", icon: "fitness_center" },
+              { type: "trainer" as const, label: "จอง PT", icon: "person" },
+              { type: "facility" as const, label: "จองพื้นที่", icon: "meeting_room" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.type}
+              type="button"
+              onClick={() => openWizard(item.type)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
             >
-              <span className="material-symbols-outlined text-[24px]">
-                {stat.icon}
-              </span>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
-              <p className="text-sm text-slate-500">{stat.label}</p>
-            </div>
-          </div>
-        ))}
+              <span className="material-symbols-outlined text-[16px]">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Quick book cards */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-2">
-        <button
-          onClick={() => {
-            resetWizard();
-            setBookingType("class");
-            setStep("resource");
-            setModalOpen(true);
-          }}
-          className="group card overflow-hidden p-0 text-left transition hover:shadow-lg"
-        >
-          <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-6 py-5 text-white">
-            <span className="material-symbols-outlined text-[32px] opacity-90">
-              fitness_center
-            </span>
-            <p className="mt-2 text-lg font-bold">จองคลาสกลุ่ม</p>
-            <p className="text-sm text-white/80">
-              {activeClasses.length} คลาสพร้อมจอง
-            </p>
-          </div>
-          <div className="px-6 py-3 text-sm font-medium text-violet-700 group-hover:text-violet-800">
-            เลือกคลาส → วัน → เวลา →
-          </div>
-        </button>
+      {/* Filters */}
+      <div className="mb-5 space-y-3">
+        <div className="relative">
+          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
+            search
+          </span>
+          <input
+            className="input-field pl-10"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ค้นหาชื่อสมาชิก คลาส เทรนเนอร์ หรือเวลา"
+          />
+        </div>
 
-        <button
-          onClick={() => {
-            resetWizard();
-            setBookingType("trainer");
-            setStep("resource");
-            setModalOpen(true);
-          }}
-          className="group card overflow-hidden p-0 text-left transition hover:shadow-lg"
-        >
-          <div className="bg-gradient-to-br from-brand-600 to-emerald-500 px-6 py-5 text-white">
-            <span className="material-symbols-outlined text-[32px] opacity-90">
-              person
-            </span>
-            <p className="mt-2 text-lg font-bold">จองเทรนเนอร์ (PT)</p>
-            <p className="text-sm text-white/80">
-              {activeTrainers.length} เทรนเนอร์พร้อมให้บริการ
-            </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-1.5">
+            {typeTabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  tab === t.key
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-          <div className="px-6 py-3 text-sm font-medium text-brand-700 group-hover:text-brand-800">
-            เลือกเทรนเนอร์ → วัน → เวลา →
+          <div className="flex flex-wrap gap-1.5">
+            {statusTabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setStatusFilter(t.key)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  statusFilter === t.key
+                    ? "bg-brand-600 text-white"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-        </button>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-              tab === t.key
-                ? "bg-brand-600 text-white shadow-md shadow-brand-600/25"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Booking list */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((booking) => {
-          const member = data.members.find((m) => m.id === booking.memberId);
-          const meta = bookingTypeMeta(booking.type);
-
-          return (
-            <div key={booking.id} className="card overflow-hidden">
-              <div className={`h-1.5 bg-gradient-to-r ${meta.gradient}`} />
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${meta.bg} ${meta.text}`}
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {meta.icon}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {booking.resourceName}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {bookingTypeLabels[booking.type].th}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge
-                    label={
-                      booking.status === "confirmed"
-                        ? "ยืนยันแล้ว"
-                        : booking.status === "cancelled"
-                          ? "ยกเลิก"
-                          : "เสร็จสิ้น"
-                    }
-                    className={statusColors[booking.status]}
-                  />
-                </div>
-
-                <div className="mt-4 space-y-2 rounded-xl bg-slate-50 px-4 py-3 text-sm">
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <span className="material-symbols-outlined text-[16px] text-slate-400">
-                      person
+      {/* Schedule list */}
+      {grouped.length > 0 ? (
+        <div className="space-y-5">
+          {grouped.map(([date, items]) => (
+            <section key={date} className="card overflow-hidden">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-5">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <h2 className="text-base font-bold text-slate-900">
+                    {dateHeading(date, today)}
+                  </h2>
+                  {dateHeading(date, today) !== formatDate(date) && (
+                    <span className="truncate text-sm text-slate-500">
+                      {formatDate(date)}
                     </span>
-                    {member?.name ?? "—"}
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <span className="material-symbols-outlined text-[16px] text-slate-400">
-                      calendar_today
-                    </span>
-                    {formatDate(booking.date)} · {booking.time}
-                  </div>
-                  {booking.notes && (
-                    <p className="text-xs text-slate-500">{booking.notes}</p>
                   )}
                 </div>
-
-                {booking.status === "confirmed" && (
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={() => completeBooking(booking.id)}
-                      className="btn-secondary flex-1 text-xs"
-                    >
-                      เสร็จสิ้น
-                    </button>
-                    <button
-                      onClick={() => cancelBooking(booking.id)}
-                      className="btn-danger flex-1 text-xs"
-                    >
-                      ยกเลิก
-                    </button>
-                  </div>
-                )}
+                <span className="shrink-0 text-xs font-medium text-slate-500">
+                  {items.length} รายการ
+                </span>
               </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {filtered.length === 0 && (
+              <ul className="divide-y divide-slate-100">
+                {items.map((booking) => {
+                  const member = data.members.find((m) => m.id === booking.memberId);
+                  const meta = bookingTypeMeta(booking.type);
+
+                  return (
+                    <li
+                      key={booking.id}
+                      className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+                    >
+                      <div className="flex min-w-[4.5rem] items-center gap-3 sm:block sm:text-center">
+                        <p className="text-xl font-bold tabular-nums tracking-tight text-slate-900">
+                          {booking.time}
+                        </p>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:mt-1 ${meta.bg} ${meta.text}`}
+                        >
+                          <span className="material-symbols-outlined text-[12px]">
+                            {meta.icon}
+                          </span>
+                          {bookingTypeLabels[booking.type].th}
+                        </span>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-slate-900">
+                          {booking.resourceName}
+                        </p>
+                        <p className="mt-0.5 truncate text-sm text-slate-500">
+                          {member?.name ?? "—"}
+                          {booking.notes ? ` · ${booking.notes}` : ""}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <Badge
+                          label={statusLabel[booking.status]}
+                          className={statusColors[booking.status]}
+                        />
+                        {booking.status === "confirmed" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => completeBooking(booking.id)}
+                              className="btn-secondary px-3 py-1.5 text-xs"
+                            >
+                              เสร็จสิ้น
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => cancelBooking(booking.id)}
+                              className="btn-danger px-3 py-1.5 text-xs"
+                            >
+                              ยกเลิก
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : (
         <div className="card flex flex-col items-center py-16 text-center">
           <span className="material-symbols-outlined text-[48px] text-slate-300">
             event_busy
           </span>
-          <p className="mt-3 text-sm font-medium text-slate-600">ยังไม่มีการจอง</p>
-          <button className="btn-primary mt-4" onClick={openWizard}>
-            สร้างการจองแรก
+          <p className="mt-3 text-sm font-medium text-slate-600">
+            {query || tab !== "all" || statusFilter !== "all"
+              ? "ไม่พบการจองตามเงื่อนไข"
+              : "ยังไม่มีการจอง"}
+          </p>
+          <button className="btn-primary mt-4" onClick={() => openWizard()}>
+            สร้างการจอง
           </button>
         </div>
       )}
@@ -441,7 +495,6 @@ export default function BookingsPage() {
         }
         wide
       >
-        {/* Step indicator */}
         <div className="mb-6 flex items-center gap-1">
           {(["type", "resource", "datetime", "member", "confirm"] as WizardStep[]).map(
             (s, i) => (
@@ -462,7 +515,6 @@ export default function BookingsPage() {
           )}
         </div>
 
-        {/* Step: Type */}
         {step === "type" && (
           <div className="grid gap-3 sm:grid-cols-3">
             {(["class", "trainer", "facility"] as BookingType[]).map((type) => {
@@ -497,7 +549,6 @@ export default function BookingsPage() {
           </div>
         )}
 
-        {/* Step: Resource */}
         {step === "resource" && (
           <div className="space-y-3">
             {bookingType === "class" &&
@@ -510,19 +561,19 @@ export default function BookingsPage() {
                     onClick={() => setResourceId(c.id)}
                     className={`w-full rounded-2xl border-2 p-4 text-left transition ${
                       resourceId === c.id
-                        ? "border-violet-500 bg-violet-50"
-                        : "border-slate-200 hover:border-violet-200"
+                        ? "border-brand-500 bg-brand-50"
+                        : "border-slate-200 hover:border-brand-200"
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{c.name}</p>
                         <p className="mt-0.5 text-xs text-slate-500">
                           {trainer?.name} · {c.duration} นาที · รับ {c.capacity} คน
                         </p>
-                        <p className="mt-1 text-xs text-violet-600">{c.schedule}</p>
+                        <p className="mt-1 text-xs text-brand-700">{c.schedule}</p>
                       </div>
-                      <span className="font-bold text-violet-700">
+                      <span className="shrink-0 font-bold text-brand-700">
                         {formatCurrency(c.price)}
                       </span>
                     </div>
@@ -591,7 +642,6 @@ export default function BookingsPage() {
           </div>
         )}
 
-        {/* Step: Date & Time */}
         {step === "datetime" && (
           <div className="space-y-5">
             <div>
@@ -697,7 +747,6 @@ export default function BookingsPage() {
           </div>
         )}
 
-        {/* Step: Member */}
         {step === "member" && (
           <div className="space-y-4">
             <div>
@@ -746,32 +795,31 @@ export default function BookingsPage() {
           </div>
         )}
 
-        {/* Step: Confirm */}
         {step === "confirm" && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-slate-50 p-5">
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-slate-500">ประเภท</span>
-                  <span className="font-medium">
+                  <span className="font-medium text-right">
                     {bookingTypeLabels[bookingType].th}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-slate-500">รายการ</span>
-                  <span className="font-medium">{getResourceName()}</span>
+                  <span className="font-medium text-right">{getResourceName()}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-slate-500">วันที่</span>
-                  <span className="font-medium">{formatDate(selectedDate)}</span>
+                  <span className="font-medium text-right">{formatDate(selectedDate)}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-slate-500">เวลา</span>
-                  <span className="font-medium">{selectedTime}</span>
+                  <span className="font-medium text-right">{selectedTime}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-slate-500">สมาชิก</span>
-                  <span className="font-medium">
+                  <span className="font-medium text-right">
                     {data.members.find((m) => m.id === memberId)?.name}
                   </span>
                 </div>

@@ -7,7 +7,7 @@ export const initialData: AppData = {
   staff: [
     {
       id: "s1",
-      name: "สมชาย ใจดี",
+      name: "Somchai Jaidee",
       email: "somchai@liftlab.fitness",
       phone: "081-234-5678",
       role: "manager",
@@ -16,7 +16,7 @@ export const initialData: AppData = {
     },
     {
       id: "s2",
-      name: "นภา แข็งแรง",
+      name: "Napa Kaengkaeng",
       email: "napa@liftlab.fitness",
       phone: "082-345-6789",
       role: "trainer",
@@ -25,7 +25,7 @@ export const initialData: AppData = {
     },
     {
       id: "s3",
-      name: "วิชัย ฟิตเนส",
+      name: "Wichai Fitness",
       email: "wichai@liftlab.fitness",
       phone: "083-456-7890",
       role: "trainer",
@@ -34,7 +34,7 @@ export const initialData: AppData = {
     },
     {
       id: "s4",
-      name: "พิมพ์ใจ รักงาน",
+      name: "Pimjai Rakngan",
       email: "pimjai@liftlab.fitness",
       phone: "084-567-8901",
       role: "front_desk",
@@ -207,7 +207,7 @@ export const initialData: AppData = {
   members: [
     {
       id: "m1",
-      name: "กมล สุขใจ",
+      name: "Kamol Sukjai",
       email: "kamol@email.com",
       phone: "089-111-2222",
       packageId: "p2",
@@ -217,7 +217,7 @@ export const initialData: AppData = {
     },
     {
       id: "m2",
-      name: "อรทัย ฟิต",
+      name: "Orathai Fit",
       email: "orathai@email.com",
       phone: "089-333-4444",
       packageId: "p1",
@@ -227,7 +227,7 @@ export const initialData: AppData = {
     },
     {
       id: "m3",
-      name: "ธนากร แรง",
+      name: "Tanakorn Raeng",
       email: "tanakorn@email.com",
       phone: "089-555-6666",
       packageId: "p3",
@@ -237,7 +237,7 @@ export const initialData: AppData = {
     },
     {
       id: "m4",
-      name: "ปิยะ ดี",
+      name: "Piya Dee",
       email: "piya@email.com",
       phone: "089-777-8888",
       packageId: "p2",
@@ -247,7 +247,7 @@ export const initialData: AppData = {
     },
     {
       id: "m5",
-      name: "มานี มีสุข",
+      name: "Manee Meesuk",
       email: "manee@email.com",
       phone: "089-999-0000",
       packageId: "p1",
@@ -272,7 +272,7 @@ export const initialData: AppData = {
       type: "trainer",
       memberId: "m2",
       resourceId: "s2",
-      resourceName: "นภา แข็งแรง (PT)",
+      resourceName: "Napa Kaengkaeng (PT)",
       date: "2026-08-09",
       time: "10:00",
       status: "confirmed",
@@ -332,7 +332,7 @@ export const initialData: AppData = {
     {
       id: "sl1",
       memberId: "m1",
-      memberName: "กมล สุขใจ",
+      memberName: "Kamol Sukjai",
       item: "Starter Package (90 วัน)",
       amount: 2990,
       date: "2026-05-11",
@@ -341,7 +341,7 @@ export const initialData: AppData = {
     {
       id: "sl2",
       memberId: "m2",
-      memberName: "อรทัย ฟิต",
+      memberName: "Orathai Fit",
       item: "Mini Package (30 วัน)",
       amount: 990,
       date: "2026-07-15",
@@ -350,7 +350,7 @@ export const initialData: AppData = {
     {
       id: "sl3",
       memberId: "m4",
-      memberName: "ปิยะ ดี",
+      memberName: "Piya Dee",
       item: "Starter Package (90 วัน)",
       amount: 2990,
       date: "2026-06-01",
@@ -359,7 +359,7 @@ export const initialData: AppData = {
     {
       id: "sl4",
       memberId: "m1",
-      memberName: "กมล สุขใจ",
+      memberName: "Kamol Sukjai",
       item: "HIIT Burn — Drop-in",
       amount: 350,
       date: "2026-08-05",
@@ -368,7 +368,7 @@ export const initialData: AppData = {
     {
       id: "sl5",
       memberId: "m2",
-      memberName: "อรทัย ฟิต",
+      memberName: "Orathai Fit",
       item: "Personal Training (5 sessions)",
       amount: 4500,
       date: "2026-08-03",

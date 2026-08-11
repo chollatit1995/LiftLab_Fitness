@@ -26,6 +26,17 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 const FETCH_TIMEOUT_MS = 8000;
 
+/**
+ * /api/data ต้องมี session พนักงาน — ห้ามเรียกตอนอยู่หน้า login หรือ portal ของสมาชิก
+ * ไม่งั้น middleware จะตอบ 401 ทั้งที่สมาชิก login ถูกต้องแล้ว
+ */
+function shouldFetchStaffDataApi(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (pathname === "/login") return false;
+  if (pathname.startsWith("/portal")) return false;
+  return true;
+}
+
 async function fetchFromApi(): Promise<AppData | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -64,6 +75,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** มีการแก้ไขที่ยังบันทึกลงฐานข้อมูลไม่สำเร็จหรือยัง */
   const unsavedRef = useRef(false);
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   const loadFromApi = useCallback(async () => {
     const apiData = await fetchFromApi();
@@ -74,25 +87,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    loadFromApi()
-      .then((ok) => {
-        if (!ok) setData(loadData());
-      })
-      .finally(() => setHydrated(true));
+    let cancelled = false;
+
+    const boot = async () => {
+      if (!shouldFetchStaffDataApi(pathnameRef.current)) {
+        if (!cancelled) {
+          setData(loadData());
+          setUsingDatabase(false);
+          setHydrated(true);
+        }
+        return;
+      }
+
+      const ok = await loadFromApi();
+      if (cancelled) return;
+      if (!ok) setData(loadData());
+      setHydrated(true);
+    };
+
+    boot();
+    return () => {
+      cancelled = true;
+    };
   }, [loadFromApi]);
 
   /**
-   * รอบแรกมักเกิดที่หน้า login ซึ่งยังไม่มี session ทำให้ /api/data ตอบ 401
-   * จึงต้องลองใหม่เมื่อเปลี่ยนหน้า ไม่งั้นจะใช้ข้อมูลในเบราว์เซอร์ไปทั้ง session
-   * แล้วเขียนทับฐานข้อมูลตอนบันทึก แต่ถ้ามีของที่ยังบันทึกไม่สำเร็จ ห้ามดึงมาทับ
+   * รอบแรกมักเกิดที่หน้า login/portal ซึ่งยังไม่มี session พนักงาน
+   * จึงต้องลองใหม่เมื่อเข้าหน้าหลังบ้านหลัง login แล้ว
+   * แต่ถ้ามีของที่ยังบันทึกไม่สำเร็จ ห้ามดึงมาทับ
    */
   useEffect(() => {
     if (!hydrated || usingDatabase || unsavedRef.current) return;
+    if (!shouldFetchStaffDataApi(pathname)) return;
     loadFromApi();
   }, [pathname, hydrated, usingDatabase, loadFromApi]);
 
   const persist = useCallback((next: AppData) => {
     saveData(next);
+    // หน้า portal/login ไม่ควรเขียนทับฐานข้อมูลผ่าน /api/data ของพนักงาน
+    if (!shouldFetchStaffDataApi(pathnameRef.current)) {
+      unsavedRef.current = false;
+      setUsingDatabase(false);
+      return;
+    }
     unsavedRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
@@ -114,6 +151,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const reloadData = useCallback(async () => {
+    if (!shouldFetchStaffDataApi(pathnameRef.current)) return;
     const apiData = await fetchFromApi();
     if (apiData) {
       setData(apiData);

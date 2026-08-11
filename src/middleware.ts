@@ -70,6 +70,11 @@ const PASSWORD_CHANGE_ALLOWED = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ไฟล์ static จาก /public ต้องไม่ผ่าน auth — ไม่เช่นนั้น favicon/logo จะได้ HTML หน้า login
+  if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|webmanifest)$/i.test(pathname)) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/portal") || pathname.startsWith("/api/portal")) {
     return handlePortal(request, pathname);
   }
@@ -145,5 +150,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    /*
+     * ไม่รัน middleware กับไฟล์ static / Next internals
+     * ถ้าไม่ยกเว้น .png แล้ว /logo.png จะถูกบังคับ login → favicon ไม่เปลี่ยน
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|webmanifest)$).*)",
+  ],
 };
