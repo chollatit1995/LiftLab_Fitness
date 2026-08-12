@@ -151,4 +151,15 @@ export const SCHEMA_STATEMENTS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     resolved_at TIMESTAMPTZ
   )`,
+  `CREATE TABLE IF NOT EXISTS coffee_sales (
+    id TEXT PRIMARY KEY,
+    member_id TEXT,
+    member_name TEXT,
+    sale_type TEXT NOT NULL DEFAULT 'paid',
+    cups INTEGER NOT NULL DEFAULT 1,
+    amount NUMERIC NOT NULL DEFAULT 0,
+    sold_on DATE NOT NULL DEFAULT CURRENT_DATE,
+    staff_name TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ];

@@ -6,6 +6,7 @@ import { withDb } from "@/lib/db/client";
 import {
   addCoffeeStamp,
   confirmStampRequest,
+  getCoffeeSalesReport,
   getLoyaltyEvents,
   getOrCreateLoyalty,
   listPendingRequests,
@@ -13,6 +14,7 @@ import {
   rejectStampRequest,
   searchMembersForCoffee,
 } from "@/lib/db/coffee-loyalty";
+import { todayISO } from "@/lib/dates";
 
 export async function GET(request: Request) {
   const session = await getServerSession();
@@ -27,6 +29,16 @@ export async function GET(request: Request) {
     const q = searchParams.get("q")?.trim() ?? "";
     const memberId = searchParams.get("memberId")?.trim() ?? "";
     const pending = searchParams.get("pending") === "1";
+    const report = searchParams.get("report") === "1";
+
+    if (report) {
+      const to = searchParams.get("to")?.trim() || todayISO();
+      const from =
+        searchParams.get("from")?.trim() ||
+        new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const data = await getCoffeeSalesReport(from, to);
+      return NextResponse.json(data);
+    }
 
     if (pending) {
       const requests = await listPendingRequests();

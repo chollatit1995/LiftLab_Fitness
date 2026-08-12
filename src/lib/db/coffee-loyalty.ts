@@ -1,13 +1,16 @@
 import {
+  CoffeeDailySale,
   CoffeeLoyalty,
   CoffeeLoyaltyEvent,
   CoffeeMemberSummary,
   CoffeeRequestType,
+  CoffeeSalesReport,
   CoffeeStampRequest,
+  DEFAULT_COFFEE_CUP_PRICE,
   STAMPS_PER_FREE,
   canRedeemFree,
 } from "../coffee-loyalty";
-import { toISODate } from "../dates";
+import { toISODate, todayISO } from "../dates";
 import { withDb } from "./client";
 
 function mapLoyalty(row: Record<string, unknown>): CoffeeLoyalty {
@@ -59,6 +62,38 @@ async function ensureLoyaltyRow(
     INSERT INTO coffee_loyalty (member_id, stamps, total_stamps, free_redeemed)
     VALUES (${memberId}, 0, 0, 0)
     ON CONFLICT (member_id) DO NOTHING
+  `;
+}
+
+async function recordCoffeeSale(
+  sql: ReturnType<typeof import("postgres")>,
+  input: {
+    memberId: string | null;
+    memberName: string | null;
+    saleType: "paid" | "free";
+    cups?: number;
+    amount?: number;
+    staffName: string;
+  }
+) {
+  const cups = input.cups ?? 1;
+  const amount =
+    input.amount ??
+    (input.saleType === "paid" ? cups * DEFAULT_COFFEE_CUP_PRICE : 0);
+  const id = generateId("cs");
+  await sql`
+    INSERT INTO coffee_sales
+      (id, member_id, member_name, sale_type, cups, amount, sold_on, staff_name)
+    VALUES (
+      ${id},
+      ${input.memberId},
+      ${input.memberName},
+      ${input.saleType},
+      ${cups},
+      ${amount},
+      CURRENT_DATE,
+      ${input.staffName}
+    )
   `;
 }
 
@@ -301,6 +336,13 @@ export async function confirmStampRequest(
       RETURNING id, member_id, event_type, stamps_after, staff_name, created_at
     `;
 
+    await recordCoffeeSale(sql, {
+      memberId,
+      memberName: (req.member_name as string) ?? null,
+      saleType: requestType === "redeem" ? "free" : "paid",
+      staffName,
+    });
+
     const updatedReq = await sql`
       UPDATE coffee_stamp_requests
       SET status = 'confirmed',
@@ -426,7 +468,7 @@ export async function addCoffeeStamp(
 > {
   return withDb(async (sql) => {
     const member = await sql`
-      SELECT id, status FROM members WHERE id = ${memberId} LIMIT 1
+      SELECT id, name, status FROM members WHERE id = ${memberId} LIMIT 1
     `;
     if (member.length === 0) return { ok: false, error: "ไม่พบสมาชิก" };
     if (member[0].status !== "active") {
@@ -452,6 +494,13 @@ export async function addCoffeeStamp(
       RETURNING id, member_id, event_type, stamps_after, staff_name, created_at
     `;
 
+    await recordCoffeeSale(sql, {
+      memberId,
+      memberName: (member[0].name as string) ?? null,
+      saleType: "paid",
+      staffName,
+    });
+
     return {
       ok: true,
       loyalty,
@@ -470,9 +519,11 @@ export async function redeemFreeCoffee(
 > {
   return withDb(async (sql) => {
     const rows = await sql`
-      SELECT member_id, stamps, total_stamps, free_redeemed, updated_at
-      FROM coffee_loyalty
-      WHERE member_id = ${memberId}
+      SELECT cl.member_id, cl.stamps, cl.total_stamps, cl.free_redeemed, cl.updated_at,
+             m.name AS member_name
+      FROM coffee_loyalty cl
+      JOIN members m ON m.id = cl.member_id
+      WHERE cl.member_id = ${memberId}
       LIMIT 1
     `;
     if (rows.length === 0 || Number(rows[0].stamps) < STAMPS_PER_FREE) {
@@ -501,10 +552,63 @@ export async function redeemFreeCoffee(
       RETURNING id, member_id, event_type, stamps_after, staff_name, created_at
     `;
 
+    await recordCoffeeSale(sql, {
+      memberId,
+      memberName: (rows[0].member_name as string) ?? null,
+      saleType: "free",
+      staffName,
+    });
+
     return {
       ok: true,
       loyalty,
       event: mapEvent(eventRows[0]),
+    };
+  });
+}
+
+export async function getCoffeeSalesReport(
+  from: string,
+  to: string
+): Promise<CoffeeSalesReport> {
+  const fromDate = toISODate(from) || todayISO();
+  const toDate = toISODate(to) || todayISO();
+
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT sold_on,
+             COALESCE(SUM(CASE WHEN sale_type = 'paid' THEN cups ELSE 0 END), 0) AS cups_sold,
+             COALESCE(SUM(CASE WHEN sale_type = 'free' THEN cups ELSE 0 END), 0) AS free_cups,
+             COALESCE(SUM(CASE WHEN sale_type = 'paid' THEN amount ELSE 0 END), 0) AS amount
+      FROM coffee_sales
+      WHERE sold_on >= ${fromDate}::date
+        AND sold_on <= ${toDate}::date
+      GROUP BY sold_on
+      ORDER BY sold_on DESC
+    `;
+
+    const days: CoffeeDailySale[] = rows.map((row) => ({
+      date: toISODate(row.sold_on),
+      cupsSold: Number(row.cups_sold ?? 0),
+      freeCups: Number(row.free_cups ?? 0),
+      amount: Number(row.amount ?? 0),
+    }));
+
+    const totals = days.reduce(
+      (acc, day) => ({
+        cupsSold: acc.cupsSold + day.cupsSold,
+        freeCups: acc.freeCups + day.freeCups,
+        amount: acc.amount + day.amount,
+      }),
+      { cupsSold: 0, freeCups: 0, amount: 0 }
+    );
+
+    return {
+      from: fromDate,
+      to: toDate,
+      cupPrice: DEFAULT_COFFEE_CUP_PRICE,
+      days,
+      totals,
     };
   });
 }

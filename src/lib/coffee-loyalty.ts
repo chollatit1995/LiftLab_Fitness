@@ -1,6 +1,9 @@
 /** จำนวนแต้ม (แก้ว) ที่ต้องสะสมก่อนแลกฟรี 1 แก้ว */
 export const STAMPS_PER_FREE = 10;
 
+/** ราคาต่อแก้ว (บาท) สำหรับรายงานยอดขายเมื่อยืนยันสะสมแต้ม */
+export const DEFAULT_COFFEE_CUP_PRICE = 45;
+
 export interface CoffeeLoyalty {
   memberId: string;
   stamps: number;
@@ -42,6 +45,25 @@ export interface CoffeeMemberSummary {
   phone: string;
   status: string;
   loyalty: CoffeeLoyalty;
+}
+
+export interface CoffeeDailySale {
+  date: string;
+  cupsSold: number;
+  freeCups: number;
+  amount: number;
+}
+
+export interface CoffeeSalesReport {
+  from: string;
+  to: string;
+  cupPrice: number;
+  days: CoffeeDailySale[];
+  totals: {
+    cupsSold: number;
+    freeCups: number;
+    amount: number;
+  };
 }
 
 export function stampsUntilFree(stamps: number): number {

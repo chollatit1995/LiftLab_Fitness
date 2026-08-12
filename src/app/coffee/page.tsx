@@ -8,20 +8,27 @@ import {
   CoffeeLoyalty,
   CoffeeLoyaltyEvent,
   CoffeeMemberSummary,
+  CoffeeSalesReport,
   CoffeeStampRequest,
+  DEFAULT_COFFEE_CUP_PRICE,
   STAMPS_PER_FREE,
   canRedeemFree,
   displayStamps,
   eventTypeLabel,
   requestTypeLabel,
 } from "@/lib/coffee-loyalty";
-import { formatDate, statusColors } from "@/lib/store";
+import { formatCurrency, formatDate, statusColors } from "@/lib/store";
+import { todayISO } from "@/lib/dates";
 
 const statusLabels: Record<string, string> = {
   active: "ใช้งาน",
   pending: "รอดำเนินการ",
   expired: "หมดอายุ",
 };
+
+function daysAgoISO(days: number) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 export default function CoffeeCounterPage() {
   const [pending, setPending] = useState<CoffeeStampRequest[]>([]);
@@ -35,6 +42,10 @@ export default function CoffeeCounterPage() {
   const [acting, setActing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [reportFrom, setReportFrom] = useState(daysAgoISO(13));
+  const [reportTo, setReportTo] = useState(todayISO());
+  const [report, setReport] = useState<CoffeeSalesReport | null>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const loadPending = useCallback(async () => {
     setLoadingPending(true);
@@ -52,6 +63,26 @@ export default function CoffeeCounterPage() {
       setLoadingPending(false);
     }
   }, []);
+
+  const loadReport = useCallback(async (from = reportFrom, to = reportTo) => {
+    setLoadingReport(true);
+    try {
+      const res = await fetch(
+        `/api/coffee?report=1&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "โหลดรายงานไม่สำเร็จ");
+        return;
+      }
+      setReport(data);
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setLoadingReport(false);
+    }
+  }, [reportFrom, reportTo]);
 
   const searchMembers = useCallback(async (q: string) => {
     if (!q.trim()) {
@@ -104,6 +135,10 @@ export default function CoffeeCounterPage() {
   }, [loadPending]);
 
   useEffect(() => {
+    loadReport();
+  }, [loadReport]);
+
+  useEffect(() => {
     const timer = setTimeout(() => searchMembers(query), 300);
     return () => clearTimeout(timer);
   }, [query, searchMembers]);
@@ -131,6 +166,7 @@ export default function CoffeeCounterPage() {
             : `ยืนยันสะสมแต้มให้ ${data.request.memberName} แล้ว`
       );
       await loadPending();
+      await loadReport();
       if (selected && data.request?.memberId === selected.id) {
         setSelected({ ...selected, loyalty: data.loyalty });
         setEvents((prev) => [data.event, ...prev].slice(0, 12));
@@ -191,12 +227,16 @@ export default function CoffeeCounterPage() {
             ? `สะสมแต้มแล้ว — ครบ ${STAMPS_PER_FREE} แก้ว!`
             : "บันทึกสะสมแต้ม +1 แก้วแล้ว"
       );
+      await loadReport();
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setActing(false);
     }
   };
+
+  const todayRow = report?.days.find((d) => d.date === todayISO());
+  const cupPrice = report?.cupPrice ?? DEFAULT_COFFEE_CUP_PRICE;
 
   return (
     <div>
@@ -291,6 +331,123 @@ export default function CoffeeCounterPage() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* Daily sales report */}
+      <section className="card mb-6 overflow-hidden">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-amber-700">analytics</span>
+              <h2 className="text-sm font-semibold text-slate-900">รายงานการซื้อกาแฟ</h2>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-slate-500">
+                จาก
+                <input
+                  type="date"
+                  value={reportFrom}
+                  onChange={(e) => setReportFrom(e.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                ถึง
+                <input
+                  type="date"
+                  value={reportTo}
+                  onChange={(e) => setReportTo(e.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                />
+              </label>
+              <button
+                onClick={() => loadReport(reportFrom, reportTo)}
+                className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800"
+              >
+                ดูรายงาน
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            นับจากการยืนยันสะสมแต้ม (ขาย) และแลกฟรี · ราคาต่อแก้ว {formatCurrency(cupPrice)}
+          </p>
+        </div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+            <p className="text-xs font-medium text-amber-800/70">วันนี้ขายได้</p>
+            <p className="mt-1 text-2xl font-bold text-amber-950">
+              {formatCurrency(todayRow?.amount ?? 0)}
+            </p>
+            <p className="text-xs text-amber-800/80">{todayRow?.cupsSold ?? 0} แก้ว</p>
+          </div>
+          <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+            <p className="text-xs font-medium text-orange-800/70">ช่วงที่เลือก · ยอดขาย</p>
+            <p className="mt-1 text-2xl font-bold text-orange-950">
+              {formatCurrency(report?.totals.amount ?? 0)}
+            </p>
+            <p className="text-xs text-orange-800/80">{report?.totals.cupsSold ?? 0} แก้ว</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-medium text-emerald-800/70">ช่วงที่เลือก · แลกฟรี</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-950">
+              {report?.totals.freeCups ?? 0}
+            </p>
+            <p className="text-xs text-emerald-800/80">แก้ว</p>
+          </div>
+        </div>
+
+        {loadingReport ? (
+          <div className="flex justify-center py-8">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+          </div>
+        ) : !report || report.days.length === 0 ? (
+          <p className="px-4 pb-8 text-center text-sm text-slate-500">
+            ยังไม่มีข้อมูลขายในช่วงนี้ — เมื่อยืนยันสะสมแต้มจะบันทึกอัตโนมัติ
+          </p>
+        ) : (
+          <div className="overflow-x-auto px-2 pb-4">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-2 font-semibold">วันที่</th>
+                  <th className="px-3 py-2 font-semibold">แก้วที่ขาย</th>
+                  <th className="px-3 py-2 font-semibold">แลกฟรี</th>
+                  <th className="px-3 py-2 font-semibold text-right">ยอดขาย</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.days.map((day) => (
+                  <tr key={day.date} className="border-b border-slate-50 hover:bg-amber-50/40">
+                    <td className="px-3 py-2.5 font-medium text-slate-800">
+                      {formatDate(day.date)}
+                      {day.date === todayISO() && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                          วันนี้
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-700">{day.cupsSold} แก้ว</td>
+                    <td className="px-3 py-2.5 text-slate-700">{day.freeCups} แก้ว</td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-amber-900">
+                      {formatCurrency(day.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 font-semibold text-slate-900">
+                  <td className="px-3 py-2.5">รวม</td>
+                  <td className="px-3 py-2.5">{report.totals.cupsSold} แก้ว</td>
+                  <td className="px-3 py-2.5">{report.totals.freeCups} แก้ว</td>
+                  <td className="px-3 py-2.5 text-right text-amber-900">
+                    {formatCurrency(report.totals.amount)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         )}
       </section>
 
