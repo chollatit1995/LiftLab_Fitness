@@ -18,6 +18,23 @@ export interface CoffeeLoyaltyEvent {
   createdAt: string;
 }
 
+export type CoffeeRequestType = "stamp" | "redeem";
+export type CoffeeRequestStatus = "pending" | "confirmed" | "rejected";
+
+export interface CoffeeStampRequest {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberEmail: string;
+  memberPhone: string;
+  requestType: CoffeeRequestType;
+  status: CoffeeRequestStatus;
+  stampsSnapshot: number;
+  staffName: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface CoffeeMemberSummary {
   id: string;
   name: string;
@@ -44,4 +61,14 @@ export function displayStamps(stamps: number): number {
 
 export function eventTypeLabel(type: CoffeeLoyaltyEvent["eventType"]): string {
   return type === "stamp" ? "สะสมแต้ม" : "แลกฟรี 1 แก้ว";
+}
+
+export function requestTypeLabel(type: CoffeeRequestType): string {
+  return type === "stamp" ? "ขอสะสมแต้ม" : "ขอแลกฟรี 1 แก้ว";
+}
+
+export function requestStatusLabel(status: CoffeeRequestStatus): string {
+  if (status === "pending") return "รอพนักงานยืนยัน";
+  if (status === "confirmed") return "ยืนยันแล้ว";
+  return "ปฏิเสธแล้ว";
 }

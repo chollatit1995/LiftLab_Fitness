@@ -3,9 +3,12 @@ import { getServerSession } from "@/lib/auth-server";
 import { can } from "@/lib/permissions";
 import {
   addCoffeeStamp,
+  confirmStampRequest,
   getLoyaltyEvents,
   getOrCreateLoyalty,
+  listPendingRequests,
   redeemFreeCoffee,
+  rejectStampRequest,
   searchMembersForCoffee,
 } from "@/lib/db/coffee-loyalty";
 
@@ -19,6 +22,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim() ?? "";
     const memberId = searchParams.get("memberId")?.trim() ?? "";
+    const pending = searchParams.get("pending") === "1";
+
+    if (pending) {
+      const requests = await listPendingRequests();
+      return NextResponse.json({ requests });
+    }
 
     if (memberId) {
       const loyalty = await getOrCreateLoyalty(memberId);
@@ -45,8 +54,31 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
+    const action = String(body.action ?? "confirm");
+    const requestId = String(body.requestId ?? "");
     const memberId = String(body.memberId ?? "");
-    const action = String(body.action ?? "stamp");
+
+    if (action === "confirm") {
+      if (!requestId) {
+        return NextResponse.json({ error: "ไม่พบรหัสคำขอ" }, { status: 400 });
+      }
+      const result = await confirmStampRequest(requestId, session.name);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      return NextResponse.json(result);
+    }
+
+    if (action === "reject") {
+      if (!requestId) {
+        return NextResponse.json({ error: "ไม่พบรหัสคำขอ" }, { status: 400 });
+      }
+      const result = await rejectStampRequest(requestId, session.name);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      return NextResponse.json(result);
+    }
 
     if (!memberId) {
       return NextResponse.json({ error: "กรุณาเลือกสมาชิก" }, { status: 400 });
@@ -60,11 +92,15 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
 
-    const result = await addCoffeeStamp(memberId, session.name);
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (action === "stamp") {
+      const result = await addCoffeeStamp(memberId, session.name);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      return NextResponse.json(result);
     }
-    return NextResponse.json(result);
+
+    return NextResponse.json({ error: "action ไม่ถูกต้อง" }, { status: 400 });
   } catch (error) {
     console.error("POST /api/coffee failed:", error);
     return NextResponse.json({ error: "บันทึกไม่สำเร็จ" }, { status: 500 });

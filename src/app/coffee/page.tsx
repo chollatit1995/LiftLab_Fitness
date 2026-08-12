@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { CoffeeStampCard } from "@/components/CoffeeStampCard";
 import { Badge } from "@/components/Badge";
@@ -8,10 +8,12 @@ import {
   CoffeeLoyalty,
   CoffeeLoyaltyEvent,
   CoffeeMemberSummary,
+  CoffeeStampRequest,
   STAMPS_PER_FREE,
   canRedeemFree,
   displayStamps,
   eventTypeLabel,
+  requestTypeLabel,
 } from "@/lib/coffee-loyalty";
 import { formatDate, statusColors } from "@/lib/store";
 
@@ -22,22 +24,41 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function CoffeeCounterPage() {
+  const [pending, setPending] = useState<CoffeeStampRequest[]>([]);
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<CoffeeMemberSummary[]>([]);
   const [selected, setSelected] = useState<CoffeeMemberSummary | null>(null);
   const [events, setEvents] = useState<CoffeeLoyaltyEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingPending, setLoadingPending] = useState(true);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const loadPending = useCallback(async () => {
+    setLoadingPending(true);
+    try {
+      const res = await fetch("/api/coffee?pending=1", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "โหลดคำขอไม่สำเร็จ");
+        return;
+      }
+      setPending(data.requests ?? []);
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setLoadingPending(false);
+    }
+  }, []);
 
   const searchMembers = useCallback(async (q: string) => {
     if (!q.trim()) {
       setMembers([]);
       return;
     }
-    setLoading(true);
-    setError("");
+    setLoadingSearch(true);
     try {
       const res = await fetch(`/api/coffee?q=${encodeURIComponent(q.trim())}`);
       const data = await res.json();
@@ -49,7 +70,7 @@ export default function CoffeeCounterPage() {
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
-      setLoading(false);
+      setLoadingSearch(false);
     }
   }, []);
 
@@ -67,10 +88,7 @@ export default function CoffeeCounterPage() {
       setError("");
       try {
         const detail = await loadMemberDetail(member.id);
-        setSelected({
-          ...member,
-          loyalty: detail.loyalty,
-        });
+        setSelected({ ...member, loyalty: detail.loyalty });
         setEvents(detail.events);
       } catch (err) {
         setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
@@ -80,18 +98,75 @@ export default function CoffeeCounterPage() {
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      searchMembers(query);
-    }, 300);
+    loadPending();
+    const timer = setInterval(loadPending, 8000);
+    return () => clearInterval(timer);
+  }, [loadPending]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchMembers(query), 300);
     return () => clearTimeout(timer);
   }, [query, searchMembers]);
 
-  const readyToRedeem = useMemo(
-    () => (selected ? canRedeemFree(selected.loyalty.stamps) : false),
-    [selected]
-  );
+  const handleConfirm = async (requestId: string) => {
+    setActingId(requestId);
+    setMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/coffee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm", requestId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "ยืนยันไม่สำเร็จ");
+        return;
+      }
+      setMessage(
+        data.request?.requestType === "redeem"
+          ? `ยืนยันแลกฟรีให้ ${data.request.memberName} แล้ว`
+          : data.readyToRedeem
+            ? `ยืนยันสะสมแต้มให้ ${data.request.memberName} แล้ว — ครบ ${STAMPS_PER_FREE} แก้ว!`
+            : `ยืนยันสะสมแต้มให้ ${data.request.memberName} แล้ว`
+      );
+      await loadPending();
+      if (selected && data.request?.memberId === selected.id) {
+        setSelected({ ...selected, loyalty: data.loyalty });
+        setEvents((prev) => [data.event, ...prev].slice(0, 12));
+      }
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setActingId(null);
+    }
+  };
 
-  const handleStamp = async () => {
+  const handleReject = async (requestId: string) => {
+    setActingId(requestId);
+    setMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/coffee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject", requestId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "ปฏิเสธไม่สำเร็จ");
+        return;
+      }
+      setMessage(`ปฏิเสธคำขอของ ${data.request.memberName} แล้ว`);
+      await loadPending();
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleManual = async (action: "stamp" | "redeem") => {
     if (!selected) return;
     setActing(true);
     setMessage("");
@@ -100,46 +175,22 @@ export default function CoffeeCounterPage() {
       const res = await fetch("/api/coffee", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: selected.id, action: "stamp" }),
+        body: JSON.stringify({ memberId: selected.id, action }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "บันทึกแต้มไม่สำเร็จ");
+        setError(data.error || "บันทึกไม่สำเร็จ");
         return;
       }
       setSelected({ ...selected, loyalty: data.loyalty });
       setEvents((prev) => [data.event, ...prev].slice(0, 12));
       setMessage(
-        data.readyToRedeem
-          ? `สะสมแต้มแล้ว — ครบ ${STAMPS_PER_FREE} แก้ว! กดแลกฟรีได้เลย`
-          : "บันทึกสะสมแต้ม +1 แก้วแล้ว"
+        action === "redeem"
+          ? "แลกฟรี 1 แก้วสำเร็จ"
+          : data.readyToRedeem
+            ? `สะสมแต้มแล้ว — ครบ ${STAMPS_PER_FREE} แก้ว!`
+            : "บันทึกสะสมแต้ม +1 แก้วแล้ว"
       );
-    } catch {
-      setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
-    } finally {
-      setActing(false);
-    }
-  };
-
-  const handleRedeem = async () => {
-    if (!selected) return;
-    setActing(true);
-    setMessage("");
-    setError("");
-    try {
-      const res = await fetch("/api/coffee", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: selected.id, action: "redeem" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "แลกฟรีไม่สำเร็จ");
-        return;
-      }
-      setSelected({ ...selected, loyalty: data.loyalty });
-      setEvents((prev) => [data.event, ...prev].slice(0, 12));
-      setMessage("แลกฟรี 1 แก้วสำเร็จ — เริ่มสะสมรอบใหม่");
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
@@ -157,17 +208,100 @@ export default function CoffeeCounterPage() {
       <PageHeader
         titleTh="Liftlab Coffee"
         titleEn="Coffee Loyalty Counter"
-        descriptionTh={`สะสมครบ ${STAMPS_PER_FREE} แก้ว ฟรี 1 แก้ว — ค้นหาสมาชิกแล้วกดยืนยันแต้ม`}
-        descriptionEn="Search member and confirm stamp or free redemption"
+        descriptionTh={`สมาชิกกดขอสะสมใน Portal → พนักงานกดยืนยันที่นี่ (ครบ ${STAMPS_PER_FREE} แก้ว ฟรี 1 แก้ว)`}
+        descriptionEn="Confirm member stamp requests from the portal"
         icon="coffee"
       />
 
+      {message && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Pending queue — primary workflow */}
+      <section className="card mb-6 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px] text-amber-700">inbox</span>
+            <h2 className="text-sm font-semibold text-slate-900">คำขอที่รอยืนยัน</h2>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+              {pending.length}
+            </span>
+          </div>
+          <button
+            onClick={loadPending}
+            className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          >
+            รีเฟรช
+          </button>
+        </div>
+
+        {loadingPending ? (
+          <div className="flex justify-center py-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+          </div>
+        ) : pending.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-slate-500">
+            ยังไม่มีคำขอจากสมาชิก — เมื่อลูกค้ากดขอสะสมใน Portal จะโผล่ที่นี่
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {pending.map((req) => (
+              <li
+                key={req.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-600 to-orange-500 text-sm font-bold text-white">
+                    {req.memberName.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">{req.memberName}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {req.memberPhone} · {req.memberEmail}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-amber-800">
+                      {requestTypeLabel(req.requestType)} · แต้มปัจจุบัน{" "}
+                      {displayStamps(req.stampsSnapshot)}/{STAMPS_PER_FREE}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={() => handleConfirm(req.id)}
+                    disabled={actingId === req.id}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-amber-600 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60 sm:flex-none"
+                  >
+                    ยืนยัน
+                  </button>
+                  <button
+                    onClick={() => handleReject(req.id)}
+                    disabled={actingId === req.id}
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60 sm:flex-none"
+                  >
+                    ปฏิเสธ
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Manual fallback */}
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        สำรอง — ค้นหาสมาชิกแล้วกดเอง (ถ้าลูกค้ากดขอไม่ได้)
+      </p>
       <div className="grid gap-6 lg:grid-cols-5">
         <section className="space-y-4 lg:col-span-2">
           <div className="card p-4">
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              ค้นหาสมาชิก
-            </label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">ค้นหาสมาชิก</label>
             <div className="relative">
               <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
                 search
@@ -179,13 +313,10 @@ export default function CoffeeCounterPage() {
                 className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm outline-none ring-brand-500 focus:border-brand-400 focus:ring-2"
               />
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              ให้ลูกค้าเปิดหน้า Liftlab Coffee ใน Member Portal แล้วค้นหาชื่อหรืออีเมล
-            </p>
           </div>
 
           <div className="card overflow-hidden">
-            {loading ? (
+            {loadingSearch ? (
               <div className="flex justify-center py-10">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
               </div>
@@ -207,9 +338,7 @@ export default function CoffeeCounterPage() {
                         {member.name.charAt(0)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-slate-900">
-                          {member.name}
-                        </p>
+                        <p className="truncate font-medium text-slate-900">{member.name}</p>
                         <p className="truncate text-xs text-slate-500">
                           {member.phone} · {member.email}
                         </p>
@@ -233,62 +362,32 @@ export default function CoffeeCounterPage() {
 
         <section className="space-y-4 lg:col-span-3">
           {!selected ? (
-            <div className="card flex min-h-[420px] flex-col items-center justify-center px-6 py-12 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-                <span className="material-symbols-outlined text-[32px]">coffee</span>
-              </div>
-              <p className="text-lg font-semibold text-slate-800">เลือกสมาชิกจากรายการ</p>
-              <p className="mt-2 max-w-sm text-sm text-slate-500">
-                ค้นหาแล้วเลือกสมาชิกเพื่อบันทึกสะสมแต้มหรือแลกกาแฟฟรี
-              </p>
+            <div className="card flex min-h-[280px] flex-col items-center justify-center px-6 py-12 text-center">
+              <p className="text-sm text-slate-500">เลือกสมาชิกถ้าต้องการกดแต้มเอง</p>
             </div>
           ) : (
             <>
-              {message && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  {message}
-                </div>
-              )}
-              {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <CoffeeStampCard
-                stamps={selected.loyalty.stamps}
-                memberName={selected.name}
-              />
-
+              <CoffeeStampCard stamps={selected.loyalty.stamps} memberName={selected.name} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
-                  onClick={handleStamp}
+                  onClick={() => handleManual("stamp")}
                   disabled={acting}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-500 px-4 py-4 text-sm font-semibold text-white shadow-md transition hover:brightness-105 disabled:opacity-60"
+                  className="rounded-2xl bg-gradient-to-r from-amber-600 to-orange-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                 >
-                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
-                  ยืนยันสะสมแต้ม (+1 แก้ว)
+                  สะสมแต้ม (+1)
                 </button>
                 <button
-                  onClick={handleRedeem}
-                  disabled={acting || !readyToRedeem}
-                  className="flex items-center justify-center gap-2 rounded-2xl border-2 border-emerald-500 bg-emerald-50 px-4 py-4 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => handleManual("redeem")}
+                  disabled={acting || !canRedeemFree(selected.loyalty.stamps)}
+                  className="rounded-2xl border-2 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 disabled:opacity-50"
                 >
-                  <span className="material-symbols-outlined text-[20px]">redeem</span>
                   แลกฟรี 1 แก้ว
                 </button>
               </div>
-
               <div className="card p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-800">ประวัติล่าสุด</h3>
-                  <p className="text-xs text-slate-500">
-                    สะสมทั้งหมด {selected.loyalty.totalStamps} แก้ว · แลกฟรี{" "}
-                    {selected.loyalty.freeRedeemed} ครั้ง
-                  </p>
-                </div>
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">ประวัติล่าสุด</h3>
                 {events.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-slate-500">ยังไม่มีประวัติ</p>
+                  <p className="py-4 text-center text-sm text-slate-500">ยังไม่มีประวัติ</p>
                 ) : (
                   <ul className="space-y-2">
                     {events.map((event) => (
