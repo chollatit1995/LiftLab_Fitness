@@ -45,6 +45,85 @@ function resolveAppRole(
   return appRole;
 }
 
+interface UserRoleContext {
+  appRole: string;
+  staffRole: string | null;
+  staffIdToLink: string | null;
+}
+
+async function loadUserRoleContext(
+  sql: ReturnType<typeof import("postgres")>,
+  userId: string
+): Promise<UserRoleContext | null> {
+  const rows = await sql`
+    SELECT
+      u.role AS app_role,
+      u.staff_id,
+      (
+        SELECT s.role FROM staff s
+        WHERE s.id = u.staff_id
+        LIMIT 1
+      ) AS staff_role_by_id,
+      (
+        SELECT s.role FROM staff s
+        WHERE LOWER(TRIM(s.email)) = LOWER(TRIM(u.email))
+        LIMIT 1
+      ) AS staff_role_by_email,
+      (
+        SELECT s.id FROM staff s
+        WHERE u.staff_id IS NULL
+          AND LOWER(TRIM(s.email)) = LOWER(TRIM(u.email))
+        LIMIT 1
+      ) AS staff_id_by_email
+    FROM app_users u
+    WHERE u.id = ${userId}
+      AND u.status = 'active'
+    LIMIT 1
+  `;
+
+  if (rows.length === 0) return null;
+
+  const row = rows[0];
+  const staffRole =
+    (row.staff_role_by_id as string | null) ??
+    (row.staff_role_by_email as string | null);
+  const staffIdToLink =
+    (row.staff_id as string | null) ??
+    (row.staff_id_by_email as string | null);
+
+  return {
+    appRole: row.app_role as string,
+    staffRole,
+    staffIdToLink,
+  };
+}
+
+async function persistResolvedRole(
+  sql: ReturnType<typeof import("postgres")>,
+  userId: string,
+  context: UserRoleContext
+): Promise<string> {
+  const resolvedRole = resolveAppRole(context.appRole, context.staffRole);
+
+  await sql`
+    UPDATE app_users
+    SET role = ${resolvedRole},
+        staff_id = COALESCE(staff_id, ${context.staffIdToLink})
+    WHERE id = ${userId}
+  `;
+
+  return resolvedRole;
+}
+
+async function resolveAndSyncUserRole(
+  sql: ReturnType<typeof import("postgres")>,
+  userId: string
+): Promise<string | null> {
+  const context = await loadUserRoleContext(sql, userId);
+  if (!context) return null;
+  return persistResolvedRole(sql, userId, context);
+}
+
 /** login ด้วยชื่อ (หลัก) หรืออีเมล (รองรับบัญชีเดิม) */
 export async function authenticate(
   login: string,
@@ -57,18 +136,26 @@ export async function authenticate(
     const rows = byEmail
       ? await sql`
           SELECT u.id, u.email, u.name, u.role, u.password, u.must_change_password,
-                 u.failed_attempts, u.locked_until, s.role AS staff_role
+                 u.failed_attempts, u.locked_until,
+                 COALESCE(
+                   (SELECT s.role FROM staff s WHERE s.id = u.staff_id LIMIT 1),
+                   (SELECT s.role FROM staff s
+                    WHERE LOWER(TRIM(s.email)) = LOWER(TRIM(u.email)) LIMIT 1)
+                 ) AS staff_role
           FROM app_users u
-          LEFT JOIN staff s ON s.id = u.staff_id
           WHERE LOWER(TRIM(u.email)) = ${normalized}
             AND u.status = 'active'
           LIMIT 2
         `
       : await sql`
           SELECT u.id, u.email, u.name, u.role, u.password, u.must_change_password,
-                 u.failed_attempts, u.locked_until, s.role AS staff_role
+                 u.failed_attempts, u.locked_until,
+                 COALESCE(
+                   (SELECT s.role FROM staff s WHERE s.id = u.staff_id LIMIT 1),
+                   (SELECT s.role FROM staff s
+                    WHERE LOWER(TRIM(s.email)) = LOWER(TRIM(u.email)) LIMIT 1)
+                 ) AS staff_role
           FROM app_users u
-          LEFT JOIN staff s ON s.id = u.staff_id
           WHERE LOWER(TRIM(REGEXP_REPLACE(u.name, '\\s+', ' ', 'g'))) = ${normalized}
             AND u.status = 'active'
           LIMIT 2
@@ -133,13 +220,15 @@ export async function authenticate(
       WHERE id = ${row.id as string}
     `;
 
+    const role = await resolveAndSyncUserRole(sql, row.id as string);
+
     return {
       ok: true,
       user: {
         id: row.id as string,
         email: row.email as string,
         name: row.name as string,
-        role: resolveAppRole(row.role as string, row.staff_role as string | null),
+        role: role ?? resolveAppRole(row.role as string, row.staff_role as string | null),
         mustChangePassword: Boolean(row.must_change_password),
       },
     };
@@ -159,19 +248,9 @@ export async function getUserById(id: string): Promise<AppUser | null> {
   });
 }
 
-/** อ่าน role จริงจาก staff ที่ผูกไว้ (เช่น เทรนเนอร์ที่บันทึกเป็น staff ใน app_users) */
+/** อ่าน role จริงจาก staff ที่ผูกไว้ และ sync ลง app_users */
 export async function resolveUserRoleById(id: string): Promise<string | null> {
-  return withDb(async (sql) => {
-    const rows = await sql`
-      SELECT u.role, s.role AS staff_role
-      FROM app_users u
-      LEFT JOIN staff s ON s.id = u.staff_id
-      WHERE u.id = ${id} AND u.status = 'active'
-      LIMIT 1
-    `;
-    if (rows.length === 0) return null;
-    return resolveAppRole(rows[0].role as string, rows[0].staff_role as string | null);
-  });
+  return withDb(async (sql) => resolveAndSyncUserRole(sql, id));
 }
 
 export async function changeOwnPassword(
