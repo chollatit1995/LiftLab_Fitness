@@ -6,6 +6,7 @@ import { withDb } from "@/lib/db/client";
 import {
   addCoffeeStamp,
   confirmStampRequest,
+  countPendingRequests,
   getCoffeeSalesReport,
   getLoyaltyEvents,
   getOrCreateLoyalty,
@@ -41,6 +42,10 @@ export async function GET(request: Request) {
     }
 
     if (pending) {
+      if (searchParams.get("count") === "1") {
+        const count = await countPendingRequests();
+        return NextResponse.json({ count });
+      }
       const requests = await listPendingRequests();
       return NextResponse.json({ requests });
     }

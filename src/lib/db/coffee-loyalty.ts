@@ -261,6 +261,17 @@ export async function listPendingRequests(): Promise<CoffeeStampRequest[]> {
   });
 }
 
+export async function countPendingRequests(): Promise<number> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM coffee_stamp_requests
+      WHERE status = 'pending'
+    `;
+    return Number(rows[0]?.count ?? 0);
+  });
+}
+
 export async function confirmStampRequest(
   requestId: string,
   staffName: string

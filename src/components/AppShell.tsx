@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
-import { isValidRole, navItemsForRole, roleLabels, defaultPathForRole } from "@/lib/permissions";
+import { isValidRole, navItemsForRole, roleLabels, defaultPathForRole, can } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
 
 interface User {
@@ -55,6 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [coffeePendingCount, setCoffeePendingCount] = useState(0);
   const expiredSyncRef = useRef(false);
 
   const isBareLayout =
@@ -136,6 +137,41 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => (user ? navItemsForRole(user.role) : []),
     [user]
   );
+
+  const canSeeCoffeeAlerts = Boolean(user && can(user.role, "coffee.stamp"));
+
+  useEffect(() => {
+    if (isBareLayout || !canSeeCoffeeAlerts) {
+      setCoffeePendingCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    const loadCount = async () => {
+      try {
+        const res = await fetch("/api/coffee?pending=1&count=1", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setCoffeePendingCount(Number(data.count ?? 0));
+      } catch {
+        /* ignore poll errors */
+      }
+    };
+
+    loadCount();
+    const interval = setInterval(loadCount, 12_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadCount();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isBareLayout, canSeeCoffeeAlerts, pathname]);
 
   const homeHref = user ? defaultPathForRole(user.role) : "/";
   const panelLabel =
@@ -219,6 +255,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {item.labelEn}
                 </span>
               </span>
+              {item.href === "/coffee" && (
+                <span className="relative shrink-0 text-slate-400 group-hover:text-white">
+                  <MaterialIcon
+                    name={coffeePendingCount > 0 ? "notifications_active" : "notifications"}
+                    className={`text-[20px] ${
+                      coffeePendingCount > 0 ? "text-amber-400" : ""
+                    }`}
+                  />
+                  {coffeePendingCount > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                      {coffeePendingCount > 99 ? "99+" : coffeePendingCount}
+                    </span>
+                  )}
+                </span>
+              )}
             </Link>
           );
         })}
