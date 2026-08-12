@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { defaultPathForRole } from "@/lib/permissions";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -35,7 +36,10 @@ export default function ChangePasswordPage() {
         return;
       }
 
-      router.push("/");
+      const meRes = await fetch("/api/auth/me");
+      const meData = meRes.ok ? await meRes.json() : null;
+      const role = meData?.user?.role ?? "staff";
+      router.push(defaultPathForRole(role));
       router.refresh();
     } catch {
       setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");

@@ -18,6 +18,7 @@ const userRoleLabels: Record<AppUserRole, string> = {
   admin: "ผู้ดูแลระบบ",
   manager: "ผู้จัดการ",
   staff: "พนักงาน",
+  trainer: "เทรนเนอร์",
 };
 
 const emptyForm = {

@@ -220,7 +220,17 @@ export async function authenticate(
       WHERE id = ${row.id as string}
     `;
 
-    const role = await resolveAndSyncUserRole(sql, row.id as string);
+    const resolvedRole = resolveAppRole(
+      row.role as string,
+      row.staff_role as string | null
+    );
+
+    // sync role/staff_id แยก — ถ้าล้มเหลวไม่ควรทำให้ login พัง
+    try {
+      await resolveAndSyncUserRole(sql, row.id as string);
+    } catch (error) {
+      console.error("Trainer role sync on login failed:", error);
+    }
 
     return {
       ok: true,
@@ -228,7 +238,7 @@ export async function authenticate(
         id: row.id as string,
         email: row.email as string,
         name: row.name as string,
-        role: role ?? resolveAppRole(row.role as string, row.staff_role as string | null),
+        role: resolvedRole,
         mustChangePassword: Boolean(row.must_change_password),
       },
     };
@@ -250,7 +260,12 @@ export async function getUserById(id: string): Promise<AppUser | null> {
 
 /** อ่าน role จริงจาก staff ที่ผูกไว้ และ sync ลง app_users */
 export async function resolveUserRoleById(id: string): Promise<string | null> {
-  return withDb(async (sql) => resolveAndSyncUserRole(sql, id));
+  try {
+    return await withDb(async (sql) => resolveAndSyncUserRole(sql, id));
+  } catch (error) {
+    console.error("resolveUserRoleById failed:", error);
+    return null;
+  }
 }
 
 export async function changeOwnPassword(
