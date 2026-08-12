@@ -10,14 +10,13 @@ import {
   CoffeeMemberSummary,
   CoffeeSalesReport,
   CoffeeStampRequest,
-  DEFAULT_COFFEE_CUP_PRICE,
   STAMPS_PER_FREE,
   canRedeemFree,
   displayStamps,
   eventTypeLabel,
   requestTypeLabel,
 } from "@/lib/coffee-loyalty";
-import { formatCurrency, formatDate, statusColors } from "@/lib/store";
+import { formatDate, statusColors } from "@/lib/store";
 import { todayISO } from "@/lib/dates";
 
 const statusLabels: Record<string, string> = {
@@ -236,7 +235,6 @@ export default function CoffeeCounterPage() {
   };
 
   const todayRow = report?.days.find((d) => d.date === todayISO());
-  const cupPrice = report?.cupPrice ?? DEFAULT_COFFEE_CUP_PRICE;
 
   return (
     <div>
@@ -370,24 +368,24 @@ export default function CoffeeCounterPage() {
             </div>
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            นับจากการยืนยันสะสมแต้ม (ขาย) และแลกฟรี · ราคาต่อแก้ว {formatCurrency(cupPrice)}
+            นับจำนวนแก้วจากการยืนยันสะสมแต้ม และแก้วแลกฟรี
           </p>
         </div>
 
         <div className="grid gap-3 p-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-medium text-amber-800/70">วันนี้ขายได้</p>
+            <p className="text-xs font-medium text-amber-800/70">วันนี้ · ขาย</p>
             <p className="mt-1 text-2xl font-bold text-amber-950">
-              {formatCurrency(todayRow?.amount ?? 0)}
+              {todayRow?.cupsSold ?? 0}
             </p>
-            <p className="text-xs text-amber-800/80">{todayRow?.cupsSold ?? 0} แก้ว</p>
+            <p className="text-xs text-amber-800/80">แก้ว</p>
           </div>
           <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-            <p className="text-xs font-medium text-orange-800/70">ช่วงที่เลือก · ยอดขาย</p>
+            <p className="text-xs font-medium text-orange-800/70">ช่วงที่เลือก · ขาย</p>
             <p className="mt-1 text-2xl font-bold text-orange-950">
-              {formatCurrency(report?.totals.amount ?? 0)}
+              {report?.totals.cupsSold ?? 0}
             </p>
-            <p className="text-xs text-orange-800/80">{report?.totals.cupsSold ?? 0} แก้ว</p>
+            <p className="text-xs text-orange-800/80">แก้ว</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
             <p className="text-xs font-medium text-emerald-800/70">ช่วงที่เลือก · แลกฟรี</p>
@@ -404,7 +402,7 @@ export default function CoffeeCounterPage() {
           </div>
         ) : !report || report.days.length === 0 ? (
           <p className="px-4 pb-8 text-center text-sm text-slate-500">
-            ยังไม่มีข้อมูลขายในช่วงนี้ — เมื่อยืนยันสะสมแต้มจะบันทึกอัตโนมัติ
+            ยังไม่มีข้อมูลในช่วงนี้ — เมื่อยืนยันสะสมแต้มจะบันทึกอัตโนมัติ
           </p>
         ) : (
           <div className="overflow-x-auto px-2 pb-4">
@@ -414,7 +412,7 @@ export default function CoffeeCounterPage() {
                   <th className="px-3 py-2 font-semibold">วันที่</th>
                   <th className="px-3 py-2 font-semibold">แก้วที่ขาย</th>
                   <th className="px-3 py-2 font-semibold">แลกฟรี</th>
-                  <th className="px-3 py-2 font-semibold text-right">ยอดขาย</th>
+                  <th className="px-3 py-2 font-semibold text-right">รวม</th>
                 </tr>
               </thead>
               <tbody>
@@ -431,7 +429,7 @@ export default function CoffeeCounterPage() {
                     <td className="px-3 py-2.5 text-slate-700">{day.cupsSold} แก้ว</td>
                     <td className="px-3 py-2.5 text-slate-700">{day.freeCups} แก้ว</td>
                     <td className="px-3 py-2.5 text-right font-semibold text-amber-900">
-                      {formatCurrency(day.amount)}
+                      {day.cupsSold + day.freeCups} แก้ว
                     </td>
                   </tr>
                 ))}
@@ -442,7 +440,7 @@ export default function CoffeeCounterPage() {
                   <td className="px-3 py-2.5">{report.totals.cupsSold} แก้ว</td>
                   <td className="px-3 py-2.5">{report.totals.freeCups} แก้ว</td>
                   <td className="px-3 py-2.5 text-right text-amber-900">
-                    {formatCurrency(report.totals.amount)}
+                    {report.totals.cupsSold + report.totals.freeCups} แก้ว
                   </td>
                 </tr>
               </tfoot>
