@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
+import { defaultPathForRole } from "@/lib/permissions";
 import {
   ENGLISH_NAME_HINT,
   filterEnglishNameInput,
@@ -54,7 +55,10 @@ function LoginForm() {
           data.mustChangePassword ? "/portal/change-password" : "/portal"
         );
       } else {
-        router.push(data.mustChangePassword ? "/change-password" : redirect);
+        const home = defaultPathForRole(data.user?.role ?? "staff");
+        const target =
+          redirect !== "/" && data.user?.role !== "trainer" ? redirect : home;
+        router.push(data.mustChangePassword ? "/change-password" : target);
       }
       router.refresh();
     } catch {

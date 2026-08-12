@@ -9,7 +9,7 @@ import {
   verifyMemberSession,
   verifySession,
 } from "@/lib/auth";
-import { canAccessPath } from "@/lib/permissions";
+import { canAccessPath, defaultPathForRole } from "@/lib/permissions";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
 
@@ -84,7 +84,7 @@ export async function middleware(request: NextRequest) {
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     if (pathname === "/login" && session) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL(defaultPathForRole(session.role), request.url));
     }
     // /login รับทั้งพนักงานและสมาชิก จึงต้องเช็ค session ฝั่งสมาชิกด้วย
     if (pathname === "/login") {
@@ -118,6 +118,10 @@ export async function middleware(request: NextRequest) {
       );
     }
     return NextResponse.redirect(new URL("/change-password", request.url));
+  }
+
+  if (pathname === "/" && session.role === "trainer") {
+    return NextResponse.redirect(new URL("/bookings", request.url));
   }
 
   if (!canAccessPath(session.role, pathname)) {

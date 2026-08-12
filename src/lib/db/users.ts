@@ -37,6 +37,14 @@ function normalizeLogin(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function resolveAppRole(
+  appRole: string,
+  staffRole: string | null | undefined
+): string {
+  if (staffRole === "trainer") return "trainer";
+  return appRole;
+}
+
 /** login ด้วยชื่อ (หลัก) หรืออีเมล (รองรับบัญชีเดิม) */
 export async function authenticate(
   login: string,
@@ -48,19 +56,21 @@ export async function authenticate(
 
     const rows = byEmail
       ? await sql`
-          SELECT id, email, name, role, password, must_change_password,
-                 failed_attempts, locked_until
-          FROM app_users
-          WHERE LOWER(TRIM(email)) = ${normalized}
-            AND status = 'active'
+          SELECT u.id, u.email, u.name, u.role, u.password, u.must_change_password,
+                 u.failed_attempts, u.locked_until, s.role AS staff_role
+          FROM app_users u
+          LEFT JOIN staff s ON s.id = u.staff_id
+          WHERE LOWER(TRIM(u.email)) = ${normalized}
+            AND u.status = 'active'
           LIMIT 2
         `
       : await sql`
-          SELECT id, email, name, role, password, must_change_password,
-                 failed_attempts, locked_until
-          FROM app_users
-          WHERE LOWER(TRIM(REGEXP_REPLACE(name, '\\s+', ' ', 'g'))) = ${normalized}
-            AND status = 'active'
+          SELECT u.id, u.email, u.name, u.role, u.password, u.must_change_password,
+                 u.failed_attempts, u.locked_until, s.role AS staff_role
+          FROM app_users u
+          LEFT JOIN staff s ON s.id = u.staff_id
+          WHERE LOWER(TRIM(REGEXP_REPLACE(u.name, '\\s+', ' ', 'g'))) = ${normalized}
+            AND u.status = 'active'
           LIMIT 2
         `;
 
@@ -129,7 +139,7 @@ export async function authenticate(
         id: row.id as string,
         email: row.email as string,
         name: row.name as string,
-        role: row.role as string,
+        role: resolveAppRole(row.role as string, row.staff_role as string | null),
         mustChangePassword: Boolean(row.must_change_password),
       },
     };
@@ -146,6 +156,21 @@ export async function getUserById(id: string): Promise<AppUser | null> {
       LIMIT 1
     `;
     return rows.length > 0 ? mapUser(rows[0]) : null;
+  });
+}
+
+/** อ่าน role จริงจาก staff ที่ผูกไว้ (เช่น เทรนเนอร์ที่บันทึกเป็น staff ใน app_users) */
+export async function resolveUserRoleById(id: string): Promise<string | null> {
+  return withDb(async (sql) => {
+    const rows = await sql`
+      SELECT u.role, s.role AS staff_role
+      FROM app_users u
+      LEFT JOIN staff s ON s.id = u.staff_id
+      WHERE u.id = ${id} AND u.status = 'active'
+      LIMIT 1
+    `;
+    if (rows.length === 0) return null;
+    return resolveAppRole(rows[0].role as string, rows[0].staff_role as string | null);
   });
 }
 
@@ -279,7 +304,7 @@ export async function updateUser(
   });
 }
 
-/** สร้างบัญชี login ให้พนักงานจากหน้าจัดการพนักงาน — บังคับเป็น role staff เสมอ */
+/** สร้างบัญชี login ให้พนักงานจากหน้าจัดการพนักงาน — role ตามตำแหน่งใน staff */
 export async function createStaffAccount(input: {
   staffId: string;
   email: string;
@@ -300,10 +325,20 @@ export async function createStaffAccount(input: {
       return { ok: false, error: "พนักงานคนนี้หรืออีเมลนี้มีบัญชีอยู่แล้ว" };
     }
 
+    const staffRows = await sql`
+      SELECT role FROM staff WHERE id = ${input.staffId} LIMIT 1
+    `;
+    if (staffRows.length === 0) {
+      return { ok: false, error: "ไม่พบข้อมูลพนักงาน" };
+    }
+
+    const staffRole = staffRows[0].role as string;
+    const appRole: AppUserRole = staffRole === "trainer" ? "trainer" : "staff";
+
     const id = `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const rows = await sql`
       INSERT INTO app_users (id, email, password, name, role, status, must_change_password, staff_id)
-      VALUES (${id}, ${input.email}, ${hashed}, ${input.name}, 'staff', 'active', TRUE, ${input.staffId})
+      VALUES (${id}, ${input.email}, ${hashed}, ${input.name}, ${appRole}, 'active', TRUE, ${input.staffId})
       RETURNING id, email, name, role, status, created_at,
                 must_change_password, last_login_at
     `;
@@ -371,4 +406,5 @@ export const userRoleLabels: Record<AppUserRole, { th: string; en: string }> = {
   admin: { th: "ผู้ดูแลระบบ", en: "Admin" },
   manager: { th: "ผู้จัดการ", en: "Manager" },
   staff: { th: "พนักงาน", en: "Staff" },
+  trainer: { th: "เทรนเนอร์", en: "Trainer" },
 };

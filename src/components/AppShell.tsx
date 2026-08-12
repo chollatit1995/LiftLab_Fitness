@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
-import { isValidRole, navItemsForRole, roleLabels } from "@/lib/permissions";
+import { isValidRole, navItemsForRole, roleLabels, defaultPathForRole } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
 
 interface User {
@@ -136,6 +136,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const homeHref = user ? defaultPathForRole(user.role) : "/";
+  const panelLabel =
+    user?.role === "trainer" ? "Trainer Panel" : "Admin Panel";
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
@@ -168,12 +172,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="border-b border-white/10 px-5 py-6">
-        <Link href="/" className="flex items-center gap-3">
+        <Link href={homeHref} className="flex items-center gap-3">
           <BrandLogo size={44} priority className="shadow-lg shadow-black/30 ring-white/20" />
           <div className="min-w-0">
             <p className="truncate text-base font-bold text-white">LiftLab Fitness</p>
             <p className="truncate text-[11px] font-medium uppercase tracking-wider text-emerald-300/80">
-              Admin Panel
+              {panelLabel}
             </p>
           </div>
         </Link>

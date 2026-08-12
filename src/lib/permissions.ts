@@ -8,7 +8,8 @@ export interface NavItem {
   roles: AppUserRole[];
 }
 
-const ALL_ROLES: AppUserRole[] = ["admin", "manager", "staff"];
+const BACK_OFFICE_ROLES: AppUserRole[] = ["admin", "manager", "staff"];
+const TRAINER_ROLES: AppUserRole[] = ["trainer"];
 
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -16,28 +17,28 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "dashboard",
     labelTh: "แดชบอร์ด",
     labelEn: "Dashboard",
-    roles: ALL_ROLES,
+    roles: BACK_OFFICE_ROLES,
   },
   {
     href: "/bookings",
     icon: "event",
     labelTh: "จองคลาส / PT / พื้นที่",
     labelEn: "Bookings",
-    roles: ALL_ROLES,
+    roles: [...BACK_OFFICE_ROLES, ...TRAINER_ROLES],
   },
   {
     href: "/members",
     icon: "card_membership",
     labelTh: "จัดการสมาชิก",
     labelEn: "Members",
-    roles: ALL_ROLES,
+    roles: [...BACK_OFFICE_ROLES, ...TRAINER_ROLES],
   },
   {
     href: "/classes",
     icon: "fitness_center",
     labelTh: "คลาส & แพ็กเกจ",
     labelEn: "Classes & Packages",
-    roles: ALL_ROLES,
+    roles: BACK_OFFICE_ROLES,
   },
   {
     href: "/promotions/manage",
@@ -51,7 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "analytics",
     labelTh: "รายงาน",
     labelEn: "Reports",
-    roles: ALL_ROLES,
+    roles: BACK_OFFICE_ROLES,
   },
   {
     href: "/staff",
@@ -73,7 +74,17 @@ export const NAV_ITEMS: NavItem[] = [
 const ALWAYS_ALLOWED = ["/profile", "/change-password", "/forbidden"];
 
 export function isValidRole(role: string): role is AppUserRole {
-  return role === "admin" || role === "manager" || role === "staff";
+  return (
+    role === "admin" ||
+    role === "manager" ||
+    role === "staff" ||
+    role === "trainer"
+  );
+}
+
+export function defaultPathForRole(role: string): string {
+  if (role === "trainer") return "/bookings";
+  return "/";
 }
 
 export function navItemsForRole(role: string): NavItem[] {
@@ -127,4 +138,5 @@ export const roleLabels: Record<AppUserRole, { th: string; en: string }> = {
   admin: { th: "ผู้ดูแลระบบ", en: "Admin" },
   manager: { th: "ผู้จัดการ", en: "Manager" },
   staff: { th: "พนักงาน", en: "Staff" },
+  trainer: { th: "เทรนเนอร์", en: "Trainer" },
 };

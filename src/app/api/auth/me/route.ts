@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySession } from "@/lib/auth";
+import {
+  createSession,
+  SESSION_COOKIE,
+  sessionCookieOptions,
+  verifySession,
+} from "@/lib/auth";
+import { resolveUserRoleById } from "@/lib/db/users";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -16,14 +22,35 @@ export async function GET() {
     return NextResponse.json({ user: null });
   }
 
-  return NextResponse.json({
+  const role = (await resolveUserRoleById(session.id)) ?? session.role;
+
+  const response = NextResponse.json({
     user: {
       id: session.id,
       email: session.email,
       name: session.name,
-      role: session.role,
+      role,
       mustChangePassword: session.mustChangePassword,
     },
     expiresAt: session.expiresAt,
   });
+
+  // อัปเดต JWT เมื่อ role จริงเปลี่ยน (เช่น พนักงานที่เป็นเทรนเนอร์แต่บันทึกเป็น staff)
+  if (role !== session.role) {
+    const token = await createSession({
+      id: session.id,
+      email: session.email,
+      name: session.name,
+      role,
+      mustChangePassword: session.mustChangePassword,
+      maxAge: session.maxAge,
+    });
+    response.cookies.set(
+      SESSION_COOKIE,
+      token,
+      sessionCookieOptions(session.maxAge)
+    );
+  }
+
+  return response;
 }
