@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMemberSession } from "@/lib/member-auth-server";
+import { ensureSchema } from "@/lib/db";
+import { withDb } from "@/lib/db/client";
 import {
   createStampRequest,
   getLoyaltyEvents,
@@ -16,16 +18,17 @@ export async function GET() {
   }
 
   try {
+    await withDb(async (sql) => ensureSchema(sql));
+
     const loyalty = await getOrCreateLoyalty(session.memberId);
     if (!loyalty) {
       return NextResponse.json({ error: "ไม่พบข้อมูลสมาชิก" }, { status: 404 });
     }
 
-    const [events, pendingRequest, requests] = await Promise.all([
-      getLoyaltyEvents(session.memberId, 10),
-      getMemberPendingRequest(session.memberId),
-      getMemberRecentRequests(session.memberId, 8),
-    ]);
+    // รันทีละอัน — pool max:1 ถ้า Promise.all จะ deadlock
+    const events = await getLoyaltyEvents(session.memberId, 10);
+    const pendingRequest = await getMemberPendingRequest(session.memberId);
+    const requests = await getMemberRecentRequests(session.memberId, 8);
 
     return NextResponse.json({
       member: {
@@ -40,7 +43,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error("GET /api/portal/coffee failed:", error);
-    return NextResponse.json({ error: "โหลดข้อมูลไม่สำเร็จ" }, { status: 500 });
+    return NextResponse.json(
+      { error: "โหลดข้อมูลไม่สำเร็จ", detail: String(error) },
+      { status: 500 }
+    );
   }
 }
 
@@ -51,6 +57,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    await withDb(async (sql) => ensureSchema(sql));
+
     const body = await request.json().catch(() => ({}));
     const requestType = (body.requestType === "redeem" ? "redeem" : "stamp") as CoffeeRequestType;
 
@@ -62,6 +70,9 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error("POST /api/portal/coffee failed:", error);
-    return NextResponse.json({ error: "ส่งคำขอไม่สำเร็จ" }, { status: 500 });
+    return NextResponse.json(
+      { error: "ส่งคำขอไม่สำเร็จ", detail: String(error) },
+      { status: 500 }
+    );
   }
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-server";
 import { can } from "@/lib/permissions";
+import { ensureSchema } from "@/lib/db";
+import { withDb } from "@/lib/db/client";
 import {
   addCoffeeStamp,
   confirmStampRequest,
@@ -19,6 +21,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    await withDb(async (sql) => ensureSchema(sql));
+
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim() ?? "";
     const memberId = searchParams.get("memberId")?.trim() ?? "";
@@ -42,7 +46,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ members });
   } catch (error) {
     console.error("GET /api/coffee failed:", error);
-    return NextResponse.json({ error: "โหลดข้อมูลไม่สำเร็จ" }, { status: 500 });
+    return NextResponse.json(
+      { error: "โหลดข้อมูลไม่สำเร็จ", detail: String(error) },
+      { status: 500 }
+    );
   }
 }
 
@@ -53,6 +60,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    await withDb(async (sql) => ensureSchema(sql));
+
     const body = await request.json();
     const action = String(body.action ?? "confirm");
     const requestId = String(body.requestId ?? "");
@@ -103,6 +112,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "action ไม่ถูกต้อง" }, { status: 400 });
   } catch (error) {
     console.error("POST /api/coffee failed:", error);
-    return NextResponse.json({ error: "บันทึกไม่สำเร็จ" }, { status: 500 });
+    return NextResponse.json(
+      { error: "บันทึกไม่สำเร็จ", detail: String(error) },
+      { status: 500 }
+    );
   }
 }
