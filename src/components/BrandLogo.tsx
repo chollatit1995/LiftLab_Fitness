@@ -1,5 +1,4 @@
 import Image from "next/image";
-import logo from "@/assets/logo.png";
 
 interface BrandLogoProps {
   /** ขนาดแสดงผลเป็นพิกเซล — แนะนำ 40–48 สำหรับหัวเว็บ */
@@ -8,6 +7,9 @@ interface BrandLogoProps {
   priority?: boolean;
 }
 
+/** ใช้ไฟล์จาก /public เพื่อให้ favicon และโลโก้ในหน้าเว็บเป็น asset เดียวกัน */
+const LOGO_SRC = "/logo.png?v=4";
+
 export function BrandLogo({
   size = 44,
   className = "",
@@ -15,12 +17,13 @@ export function BrandLogo({
 }: BrandLogoProps) {
   return (
     <Image
-      src={logo}
+      src={LOGO_SRC}
       alt="LiftLab Fitness"
       width={size}
       height={size}
       className={`shrink-0 rounded-full object-contain ${className}`}
       priority={priority}
+      unoptimized
     />
   );
 }
