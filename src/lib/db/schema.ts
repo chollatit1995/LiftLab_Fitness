@@ -126,4 +126,19 @@ export const SCHEMA_STATEMENTS = [
   `ALTER TABLE membership_packages ADD COLUMN IF NOT EXISTS session_limit INTEGER`,
   `ALTER TABLE members ADD COLUMN IF NOT EXISTS sessions_total INTEGER`,
   `ALTER TABLE members ADD COLUMN IF NOT EXISTS sessions_used INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS coffee_loyalty (
+    member_id TEXT PRIMARY KEY,
+    stamps INTEGER NOT NULL DEFAULT 0,
+    total_stamps INTEGER NOT NULL DEFAULT 0,
+    free_redeemed INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE TABLE IF NOT EXISTS coffee_loyalty_events (
+    id TEXT PRIMARY KEY,
+    member_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    stamps_after INTEGER NOT NULL DEFAULT 0,
+    staff_name TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ];

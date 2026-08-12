@@ -401,8 +401,8 @@ export default function PortalPage() {
           </div>
         )}
 
-        {/* Quick actions — จองคลาส & PT */}
-        <section className="mb-8 grid gap-3 sm:grid-cols-2">
+        {/* Quick actions — จองคลาส, PT & Coffee */}
+        <section className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/portal/book?tab=class"
             className={`group flex items-center gap-4 rounded-2xl border p-5 shadow-sm transition ${
@@ -448,6 +448,23 @@ export default function PortalPage() {
               </p>
             </div>
             <span className="material-symbols-outlined text-[20px] text-brand-400 transition group-hover:translate-x-0.5 group-hover:text-brand-600">
+              arrow_forward
+            </span>
+          </Link>
+          <Link
+            href="/portal/coffee"
+            className="group flex items-center gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm transition hover:border-amber-300 hover:shadow-md sm:col-span-2 lg:col-span-1"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-700 to-orange-500 text-white shadow-md">
+              <span className="material-symbols-outlined text-[24px]">coffee</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-slate-900">Liftlab Coffee</p>
+              <p className="text-xs text-slate-500">
+                สะสมครบ 10 แก้ว ฟรี 1 แก้ว
+              </p>
+            </div>
+            <span className="material-symbols-outlined text-[20px] text-amber-500 transition group-hover:translate-x-0.5 group-hover:text-amber-700">
               arrow_forward
             </span>
           </Link>

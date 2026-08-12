@@ -34,6 +34,13 @@ export const NAV_ITEMS: NavItem[] = [
     roles: [...BACK_OFFICE_ROLES, ...TRAINER_ROLES],
   },
   {
+    href: "/coffee",
+    icon: "coffee",
+    labelTh: "Liftlab Coffee",
+    labelEn: "Coffee Loyalty",
+    roles: [...BACK_OFFICE_ROLES, ...TRAINER_ROLES],
+  },
+  {
     href: "/classes",
     icon: "fitness_center",
     labelTh: "คลาส & แพ็กเกจ",
@@ -115,7 +122,8 @@ export type Permission =
   | "reports.sales"
   | "staff.manage"
   | "staff.grantAccess"
-  | "users.manage";
+  | "users.manage"
+  | "coffee.stamp";
 
 const PERMISSIONS: Record<Permission, AppUserRole[]> = {
   "members.delete": ["admin", "manager"],
@@ -127,6 +135,7 @@ const PERMISSIONS: Record<Permission, AppUserRole[]> = {
   // บัญชีที่สร้างจากหน้านี้ถูกบังคับเป็น role staff เสมอ manager จึงยกระดับสิทธิ์ใครไม่ได้
   "staff.grantAccess": ["admin", "manager"],
   "users.manage": ["admin"],
+  "coffee.stamp": ["admin", "manager", "staff", "trainer"],
 };
 
 export function can(role: string, permission: Permission): boolean {

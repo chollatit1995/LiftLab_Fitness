@@ -33,6 +33,7 @@ function pageTitle(pathname: string): string {
   const map: Record<string, string> = {
     "/": "แดชบอร์ด",
     "/members": "สมาชิก",
+    "/coffee": "Liftlab Coffee",
     "/bookings": "การจอง",
     "/classes": "คลาส & แพ็กเกจ",
     "/staff": "พนักงาน",
