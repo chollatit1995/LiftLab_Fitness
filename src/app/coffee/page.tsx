@@ -372,20 +372,13 @@ export default function CoffeeCounterPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 p-4 sm:grid-cols-3">
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
             <p className="text-xs font-medium text-amber-800/70">วันนี้ · ขาย</p>
             <p className="mt-1 text-2xl font-bold text-amber-950">
               {todayRow?.cupsSold ?? 0}
             </p>
             <p className="text-xs text-amber-800/80">แก้ว</p>
-          </div>
-          <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-            <p className="text-xs font-medium text-orange-800/70">ช่วงที่เลือก · ขาย</p>
-            <p className="mt-1 text-2xl font-bold text-orange-950">
-              {report?.totals.cupsSold ?? 0}
-            </p>
-            <p className="text-xs text-orange-800/80">แก้ว</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
             <p className="text-xs font-medium text-emerald-800/70">ช่วงที่เลือก · แลกฟรี</p>
