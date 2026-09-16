@@ -1,4 +1,4 @@
-import { AppData, CancelledByRole } from "../types";
+import { AppData, Booking, CancelledByRole } from "../types";
 import { initialData } from "../store";
 import { SCHEMA_CONSTRAINT_STATEMENTS, SCHEMA_STATEMENTS } from "./schema";
 import { toISODate } from "../dates";
@@ -6,9 +6,16 @@ import { withDb } from "./client";
 import { mergeBookings, mergeRenewals } from "./merge";
 import {
   CancelActor,
+  facilityCapacityMap,
+  findFacilityOverbookings,
   findTrainerSlotConflicts,
   stampCancellations,
 } from "../bookings";
+import {
+  AppDataCollection,
+  blockedCollections,
+  restrictBookingsToTrainer,
+} from "../data-authz";
 import { mapRenewalRow } from "./renewals";
 
 export { isDbConfigured, getDatabaseUrl } from "./client";
@@ -401,18 +408,55 @@ export interface RejectedBooking {
 export interface PersistResult {
   /** การจองที่ client ส่งมาแต่บันทึกไม่ได้เพราะช่วงเวลาถูกจองไปแล้ว */
   rejectedBookings: RejectedBooking[];
+  /** ส่วนของข้อมูลที่ถูกแก้มาแต่ผู้ใช้ไม่มีสิทธิ์ — คืนค่าเดิมจากฐานข้อมูลแทน */
+  blockedCollections: AppDataCollection[];
+  /** จำนวนการจองที่เทรนเนอร์พยายามแก้ทั้งที่ไม่ใช่คิวของตัวเอง */
+  blockedBookings: number;
+}
+
+export interface SaveActor extends CancelActor {
+  /** staff.id ที่ผูกกับบัญชี — ใช้ตัดสินว่าเป็นเจ้าของคิวไหม */
+  staffId: string | null;
 }
 
 /** บันทึกพร้อม merge ข้อมูลจาก DB ก่อน — ป้องกัน booking/renewal จาก portal หาย */
 export async function persistAppData(
   data: AppData,
-  actor: CancelActor | null = null
+  actor: SaveActor | null = null
 ): Promise<PersistResult> {
   return withDb(async (sql) => {
     await ensureSchema(sql);
     const existing = await loadAppData(sql);
+
+    /**
+     * ชั้นสิทธิ์: ส่วนที่ผู้ใช้ไม่มีสิทธิ์แก้ ให้คืนค่าจากฐานข้อมูลทับที่ client ส่งมา
+     * หน้าเว็บซ่อนเมนูอยู่แล้ว แต่ถ้าไม่มีชั้นนี้ ใครยิง API ตรงก็เขียนทับได้ทั้งระบบ
+     */
+    const blocked = blockedCollections(actor?.role ?? null, existing, data);
+    const authorized: AppData = { ...data };
+    for (const collection of blocked) {
+      Object.assign(authorized, { [collection]: existing[collection] });
+    }
+    if (blocked.length > 0) {
+      console.warn(
+        `ปฏิเสธการแก้ไขที่เกินสิทธิ์ของ role "${actor?.role ?? "ไม่ทราบ"}":`,
+        blocked.join(", ")
+      );
+    }
+
+    let blockedBookings = 0;
+    if (actor?.role === "trainer") {
+      const restricted = restrictBookingsToTrainer(
+        authorized.bookings,
+        existing,
+        actor.staffId
+      );
+      authorized.bookings = restricted.bookings;
+      blockedBookings = restricted.blocked;
+    }
+
     const bookings = stampCancellations(
-      mergeBookings(existing.bookings, data.bookings),
+      mergeBookings(existing.bookings, authorized.bookings),
       existing.bookings,
       actor
     );
@@ -425,7 +469,23 @@ export async function persistAppData(
       existing.bookings.filter((b) => b.status === "confirmed").map((b) => b.id)
     );
     const existingIds = new Set(existing.bookings.map((b) => b.id));
-    const conflicts = findTrainerSlotConflicts(bookings, (b) => incumbentIds.has(b.id));
+    const hasPriority = (b: Booking) => incumbentIds.has(b.id);
+
+    const trainerConflicts = findTrainerSlotConflicts(bookings, hasPriority);
+    const facilityConflicts = findFacilityOverbookings(
+      bookings,
+      facilityCapacityMap(authorized.facilities ?? existing.facilities),
+      hasPriority
+    );
+
+    const reasonById = new Map<string, string>();
+    for (const b of trainerConflicts) {
+      reasonById.set(b.id, "เทรนเนอร์ถูกจองในช่วงเวลานี้ไปแล้ว");
+    }
+    for (const b of facilityConflicts) {
+      reasonById.set(b.id, "พื้นที่เต็มแล้วในช่วงเวลานี้");
+    }
+    const conflicts = [...trainerConflicts, ...facilityConflicts];
 
     // ตัดได้เฉพาะรายการที่ยังไม่เคยลง DB — รายการเก่าที่ซ้ำกันอยู่แล้วต้องให้คนตัดสินใจเอง
     const rejected = conflicts.filter((b) => !existingIds.has(b.id));
@@ -433,17 +493,17 @@ export async function persistAppData(
     const stale = conflicts.filter((b) => existingIds.has(b.id));
     if (stale.length > 0) {
       console.warn(
-        `พบการจอง PT ซ้ำช่วงเวลาที่ค้างอยู่ในฐานข้อมูล ${stale.length} รายการ — ต้องยกเลิกรายการที่ไม่ต้องการด้วยตนเอง:`,
+        `พบการจองซ้ำช่วงเวลาที่ค้างอยู่ในฐานข้อมูล ${stale.length} รายการ — ต้องยกเลิกรายการที่ไม่ต้องการด้วยตนเอง:`,
         stale.map((b) => `${b.id} ${b.resourceName} ${b.date} ${b.time}`)
       );
     }
 
     const merged: AppData = {
-      ...data,
+      ...authorized,
       bookings: bookings.filter((b) => !rejectedIds.has(b.id)),
       membershipRenewals: mergeRenewals(
         existing.membershipRenewals,
-        data.membershipRenewals ?? []
+        authorized.membershipRenewals ?? []
       ),
     };
     await saveAppData(merged, sql);
@@ -454,8 +514,10 @@ export async function persistAppData(
         resourceName: b.resourceName,
         date: b.date,
         time: b.time,
-        reason: "เทรนเนอร์ถูกจองในช่วงเวลานี้ไปแล้ว",
+        reason: reasonById.get(b.id) ?? "ช่วงเวลานี้ถูกจองไปแล้ว",
       })),
+      blockedCollections: blocked,
+      blockedBookings,
     };
   });
 }

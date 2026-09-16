@@ -156,6 +156,13 @@ export function trainerSlotKey(resourceId: string, date: string, time: string): 
   return `${resourceId}|${date.slice(0, 10)}|${time}`;
 }
 
+/** ความจุของแต่ละพื้นที่ สำหรับตรวจการจองเกิน */
+export function facilityCapacityMap(
+  facilities: { id: string; capacity: number }[]
+): Map<string, number> {
+  return new Map(facilities.map((f) => [f.id, f.capacity]));
+}
+
 /**
  * หาการจอง PT ที่ชนกัน — เทรนเนอร์คนเดียว วัน+เวลาเดียวกัน แต่มีมากกว่า 1 รายการที่ยังยืนยันอยู่
  * คืนเฉพาะ "รายการส่วนเกิน" ของแต่ละช่วงเวลา (รายการที่ได้สิทธิ์ถือ slot จะไม่ถูกคืนออกมา)
@@ -238,6 +245,45 @@ export function classSlotAvailability(
   const booked = countSlotBookings(bookings, classId, date, time);
   const remaining = Math.max(0, capacity - booked);
   return { booked, remaining, full: remaining <= 0 };
+}
+
+/** คีย์ช่วงเวลาของทรัพยากรใดก็ได้ (เทรนเนอร์ / พื้นที่) */
+function slotKey(resourceId: string, date: string, time: string): string {
+  return `${resourceId}|${date.slice(0, 10)}|${time}`;
+}
+
+/**
+ * หาการจองพื้นที่ที่เกินความจุของพื้นที่นั้นในช่วงเวลาเดียวกัน
+ * ต่างจาก PT ตรงที่พื้นที่รับได้หลายคน จึงเทียบกับ capacity ไม่ใช่ 1
+ * พื้นที่ที่ไม่รู้ความจุถือว่ารับได้ 1 คน เพื่อไม่ให้หลุดโดยไม่ตั้งใจ
+ */
+export function findFacilityOverbookings<
+  T extends Pick<Booking, "id" | "type" | "resourceId" | "date" | "time" | "status">
+>(
+  bookings: T[],
+  capacities: Map<string, number>,
+  hasPriority: (booking: T) => boolean = () => false
+): T[] {
+  const groups = new Map<string, T[]>();
+  for (const booking of bookings) {
+    if (booking.type !== "facility" || booking.status !== "confirmed") continue;
+    const key = slotKey(booking.resourceId, booking.date, booking.time);
+    const list = groups.get(key) ?? [];
+    list.push(booking);
+    groups.set(key, list);
+  }
+
+  const overbooked: T[] = [];
+  for (const list of groups.values()) {
+    const capacity = Math.max(1, capacities.get(list[0].resourceId) ?? 1);
+    if (list.length <= capacity) continue;
+    // รายการที่มีสิทธิ์ก่อน (เช่น อยู่ในฐานข้อมูลแล้ว) ได้ที่นั่งก่อน
+    const ordered = [...list].sort(
+      (a, b) => Number(hasPriority(b)) - Number(hasPriority(a))
+    );
+    overbooked.push(...ordered.slice(capacity));
+  }
+  return overbooked;
 }
 
 export function memberAlreadyBooked(

@@ -6,7 +6,7 @@ import {
   sessionCookieOptions,
   verifySession,
 } from "@/lib/auth";
-import { resolveUserRoleById } from "@/lib/db/users";
+import { resolveUserIdentity } from "@/lib/db/users";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -22,7 +22,8 @@ export async function GET() {
     return NextResponse.json({ user: null });
   }
 
-  const role = (await resolveUserRoleById(session.id)) ?? session.role;
+  const identity = await resolveUserIdentity(session.id);
+  const role = identity?.role ?? session.role;
 
   const response = NextResponse.json({
     user: {
@@ -30,6 +31,7 @@ export async function GET() {
       email: session.email,
       name: session.name,
       role,
+      staffId: identity?.staffId ?? null,
       mustChangePassword: session.mustChangePassword,
     },
     expiresAt: session.expiresAt,

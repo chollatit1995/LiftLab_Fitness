@@ -268,6 +268,36 @@ export async function resolveUserRoleById(id: string): Promise<string | null> {
   }
 }
 
+export interface UserIdentity {
+  role: string;
+  /** staff.id ที่ผูกกับบัญชีนี้ — เทรนเนอร์ใช้เป็นเจ้าของคิว PT */
+  staffId: string | null;
+}
+
+/**
+ * ตัวตนที่เชื่อถือได้ของผู้ใช้ อ่านจากฐานข้อมูลไม่ใช่จาก JWT
+ * role ใน token อาจเก่าถ้าเพิ่งเปลี่ยนตำแหน่งพนักงาน
+ */
+export async function resolveUserIdentity(id: string): Promise<UserIdentity | null> {
+  try {
+    return await withDb(async (sql) => {
+      const context = await loadUserRoleContext(sql, id);
+      if (!context) return null;
+      const role = await persistResolvedRole(sql, id, context);
+      const rows = await sql`
+        SELECT staff_id FROM app_users WHERE id = ${id} LIMIT 1
+      `;
+      return {
+        role,
+        staffId: (rows[0]?.staff_id as string | null) ?? null,
+      };
+    });
+  } catch (error) {
+    console.error("resolveUserIdentity failed:", error);
+    return null;
+  }
+}
+
 export async function changeOwnPassword(
   id: string,
   currentPassword: string,

@@ -32,6 +32,9 @@ interface DataContextValue {
   usingDatabase: boolean;
   rejectedBookings: RejectedBooking[];
   dismissRejectedBookings: () => void;
+  /** ข้อความเตือนเมื่อการแก้ไขถูกปฏิเสธเพราะสิทธิ์ไม่พอ */
+  permissionNotice: string;
+  dismissPermissionNotice: () => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -66,24 +69,67 @@ async function fetchFromApi(): Promise<AppData | null> {
   }
 }
 
-async function saveToApi(
-  data: AppData
-): Promise<{ ok: boolean; rejectedBookings: RejectedBooking[] }> {
+interface SaveOutcome {
+  ok: boolean;
+  rejectedBookings: RejectedBooking[];
+  /** ส่วนของข้อมูลที่ถูกปฏิเสธเพราะสิทธิ์ไม่พอ */
+  blockedCollections: string[];
+  blockedBookings: number;
+}
+
+const EMPTY_OUTCOME: Omit<SaveOutcome, "ok"> = {
+  rejectedBookings: [],
+  blockedCollections: [],
+  blockedBookings: 0,
+};
+
+async function saveToApi(data: AppData): Promise<SaveOutcome> {
   try {
     const res = await fetch("/api/data", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) return { ok: false, rejectedBookings: [] };
+    if (!res.ok) return { ok: false, ...EMPTY_OUTCOME };
     const json = await res.json().catch(() => null);
     return {
       ok: true,
       rejectedBookings: (json?.rejectedBookings as RejectedBooking[]) ?? [],
+      blockedCollections: (json?.blockedCollections as string[]) ?? [],
+      blockedBookings: Number(json?.blockedBookings ?? 0),
     };
   } catch {
-    return { ok: false, rejectedBookings: [] };
+    return { ok: false, ...EMPTY_OUTCOME };
   }
+}
+
+const COLLECTION_LABELS: Record<string, string> = {
+  staff: "ข้อมูลพนักงาน",
+  classes: "คลาส",
+  packages: "แพ็กเกจ",
+  promotions: "โปรโมชั่น",
+  members: "ข้อมูลสมาชิก",
+  bookings: "การจอง",
+  facilities: "พื้นที่",
+  sales: "ยอดขาย",
+  membershipRenewals: "ประวัติต่ออายุ",
+};
+
+function permissionNoticeFor(outcome: SaveOutcome): string {
+  const parts: string[] = [];
+  if (outcome.blockedCollections.length > 0) {
+    const names = outcome.blockedCollections
+      .map((c) => COLLECTION_LABELS[c] ?? c)
+      .join(", ");
+    parts.push(`คุณไม่มีสิทธิ์แก้ไข${names}`);
+  }
+  if (outcome.blockedBookings > 0) {
+    parts.push(
+      `แก้ไขได้เฉพาะคิวของตัวเอง (${outcome.blockedBookings} รายการถูกปฏิเสธ)`
+    );
+  }
+  if (parts.length === 0) return "";
+  return `${parts.join(" · ")} — การเปลี่ยนแปลงถูกยกเลิกแล้ว`;
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -92,6 +138,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [usingDatabase, setUsingDatabase] = useState(false);
   const [rejectedBookings, setRejectedBookings] = useState<RejectedBooking[]>([]);
+  const [permissionNotice, setPermissionNotice] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** มีการแก้ไขที่ยังบันทึกลงฐานข้อมูลไม่สำเร็จหรือยัง */
   const unsavedRef = useRef(false);
@@ -153,13 +200,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     unsavedRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      const { ok, rejectedBookings: rejected } = await saveToApi(next);
-      unsavedRef.current = !ok;
-      setUsingDatabase(ok);
-      if (!ok || rejected.length === 0) return;
+      const outcome = await saveToApi(next);
+      unsavedRef.current = !outcome.ok;
+      setUsingDatabase(outcome.ok);
+      if (!outcome.ok) return;
 
-      // เซิร์ฟเวอร์ไม่รับการจองบางรายการ — ต้องดึงของจริงมาแสดงแทนที่จะปล่อยให้เห็นรายการที่ไม่มีอยู่
-      setRejectedBookings(rejected);
+      const notice = permissionNoticeFor(outcome);
+      if (notice) setPermissionNotice(notice);
+      if (outcome.rejectedBookings.length > 0) {
+        setRejectedBookings(outcome.rejectedBookings);
+      }
+      if (!notice && outcome.rejectedBookings.length === 0) return;
+
+      // เซิร์ฟเวอร์ไม่รับบางส่วน — ต้องดึงของจริงมาแสดง ไม่งั้นหน้าจอจะโชว์สิ่งที่ไม่ได้ถูกบันทึก
       const fresh = await fetchFromApi();
       if (fresh) {
         setData(fresh);
@@ -169,6 +222,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const dismissRejectedBookings = useCallback(() => setRejectedBookings([]), []);
+  const dismissPermissionNotice = useCallback(() => setPermissionNotice(""), []);
 
   const updateData = useCallback(
     (updater: (prev: AppData) => AppData) => {
@@ -208,6 +262,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         usingDatabase,
         rejectedBookings,
         dismissRejectedBookings,
+        permissionNotice,
+        dismissPermissionNotice,
       }}
     >
       {children}

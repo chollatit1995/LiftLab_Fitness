@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { AppData } from "@/lib/types";
 import {
-  CancelActor,
   getOrInitAppData,
   isDbConfigured,
   persistAppData,
+  SaveActor,
 } from "@/lib/db";
 import { getServerSession } from "@/lib/auth-server";
 import { isValidRole } from "@/lib/permissions";
+import { resolveUserIdentity } from "@/lib/db/users";
 
 export async function GET() {
   if (!isDbConfigured()) {
@@ -40,17 +41,31 @@ export async function PUT(request: Request) {
   try {
     const data = (await request.json()) as AppData;
 
-    // ต้องอ่านผู้ใช้จาก session ฝั่งเซิร์ฟเวอร์ ไม่ใช่จาก payload ที่ client ส่งมา
+    /**
+     * ตัวตนต้องมาจาก session ฝั่งเซิร์ฟเวอร์ ไม่ใช่จาก payload ที่ client ส่งมา
+     * และต้องอ่าน role จากฐานข้อมูล เพราะ role ใน JWT อาจเก่าถ้าเพิ่งเปลี่ยนตำแหน่ง
+     */
     const session = await getServerSession();
-    const actor: CancelActor | null =
-      session && isValidRole(session.role)
-        ? { name: session.name, role: session.role }
-        : null;
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const identity = await resolveUserIdentity(session.id);
+    const role = identity?.role ?? session.role;
+    if (!isValidRole(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actor: SaveActor = {
+      name: session.name,
+      role,
+      staffId: identity?.staffId ?? null,
+    };
 
     const result = await persistAppData(data, actor);
     return NextResponse.json({
       ok: true,
       rejectedBookings: result.rejectedBookings,
+      blockedCollections: result.blockedCollections,
+      blockedBookings: result.blockedBookings,
     });
   } catch (error) {
     console.error("PUT /api/data failed:", error);

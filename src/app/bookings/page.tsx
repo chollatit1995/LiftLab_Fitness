@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
@@ -9,6 +9,7 @@ import {
   bookingTypeMeta,
   BOOKING_HORIZON_DAYS,
   classSlotAvailability,
+  countSlotBookings,
   dateCardMonth,
   dayNumber,
   groupDatesByMonth,
@@ -28,6 +29,7 @@ import {
 } from "@/lib/store";
 import { Booking, BookingType, CancelledByRole } from "@/lib/types";
 import { hasSessionQuota } from "@/lib/sessions";
+import { classTrainerMap, isBookingOwnedByTrainer } from "@/lib/data-authz";
 import { todayISO } from "@/lib/dates";
 
 type WizardStep = "type" | "resource" | "datetime" | "member" | "confirm";
@@ -104,13 +106,36 @@ export default function BookingsPage() {
   const [notes, setNotes] = useState("");
   const [wizardError, setWizardError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [role, setRole] = useState("");
+  const [staffId, setStaffId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        setRole(d.user?.role ?? "");
+        setStaffId(d.user?.staffId ?? null);
+      })
+      .catch(() => setRole(""));
+  }, []);
+
+  const isTrainer = role === "trainer";
 
   const dates = useMemo(() => upcomingDates(BOOKING_HORIZON_DAYS), []);
   const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
   const today = todayISO();
 
+  /** เทรนเนอร์เห็นเฉพาะคิวของตัวเอง — คิว PT ของตน และคลาสที่ตนเป็นผู้สอน */
+  const visibleBookings = useMemo(() => {
+    if (!isTrainer) return data.bookings;
+    const trainerIds = classTrainerMap(data.classes);
+    return data.bookings.filter((b) =>
+      isBookingOwnedByTrainer(b, staffId, trainerIds)
+    );
+  }, [data.bookings, data.classes, isTrainer, staffId]);
+
   const stats = useMemo(() => {
-    const todayBookings = data.bookings.filter(
+    const todayBookings = visibleBookings.filter(
       (b) => b.date === today && b.status === "confirmed"
     );
     return {
@@ -119,11 +144,11 @@ export default function BookingsPage() {
       trainer: todayBookings.filter((b) => b.type === "trainer").length,
       facility: todayBookings.filter((b) => b.type === "facility").length,
     };
-  }, [data.bookings, today]);
+  }, [visibleBookings, today]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return data.bookings.filter((b) => {
+    return visibleBookings.filter((b) => {
       if (tab !== "all" && b.type !== tab) return false;
       if (statusFilter !== "all" && b.status !== statusFilter) return false;
       if (!q) return true;
@@ -135,7 +160,7 @@ export default function BookingsPage() {
         b.date.includes(q)
       );
     });
-  }, [data.bookings, data.members, tab, statusFilter, query]);
+  }, [visibleBookings, data.members, tab, statusFilter, query]);
 
   const grouped = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => {
@@ -151,11 +176,23 @@ export default function BookingsPage() {
     return [...map.entries()];
   }, [filtered]);
 
-  const activeClasses = data.classes.filter((c) => c.status === "active");
-  const activeTrainers = data.staff.filter(
-    (s) => s.role === "trainer" && s.status === "active"
+  /** เทรนเนอร์สร้างได้เฉพาะคิวของตัวเอง ไม่งั้นจะได้การจองที่ตัวเองมองไม่เห็น */
+  const activeClasses = data.classes.filter(
+    (c) => c.status === "active" && (!isTrainer || c.trainerId === staffId)
   );
-  const activeFacilities = data.facilities.filter((f) => f.status === "available");
+  const activeTrainers = data.staff.filter(
+    (s) =>
+      s.role === "trainer" &&
+      s.status === "active" &&
+      (!isTrainer || s.id === staffId)
+  );
+  const activeFacilities = isTrainer
+    ? []
+    : data.facilities.filter((f) => f.status === "available");
+
+  const bookableTypes: BookingType[] = isTrainer
+    ? ["class", "trainer"]
+    : ["class", "trainer", "facility"];
 
   const selectedClass = activeClasses.find((c) => c.id === resourceId);
   const selectedTrainer = activeTrainers.find((t) => t.id === resourceId);
@@ -222,6 +259,14 @@ export default function BookingsPage() {
         label: full ? "เต็ม" : `เหลือ ${remaining}`,
       };
     }
+    if (bookingType === "facility" && selectedFacility) {
+      const booked = countSlotBookings(data.bookings, resourceId, selectedDate, time);
+      const remaining = Math.max(0, selectedFacility.capacity - booked);
+      return {
+        available: remaining > 0,
+        label: remaining > 0 ? `เหลือ ${remaining}` : "เต็ม",
+      };
+    }
     return { available: true, label: "ว่าง" };
   };
 
@@ -241,6 +286,17 @@ export default function BookingsPage() {
         selectedClass.capacity
       );
       if (full) return "คลาสเต็มแล้วในช่วงเวลานี้ กรุณาเลือกเวลาอื่น";
+    }
+    if (bookingType === "facility" && selectedFacility) {
+      const booked = countSlotBookings(
+        bookings,
+        resourceId,
+        selectedDate,
+        selectedTime
+      );
+      if (booked >= selectedFacility.capacity) {
+        return "พื้นที่เต็มแล้วในช่วงเวลานี้ กรุณาเลือกเวลาอื่น";
+      }
     }
     return "";
   };
@@ -406,13 +462,13 @@ export default function BookingsPage() {
           </span>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
-          {(
-            [
-              { type: "class" as const, label: "จองคลาส", icon: "fitness_center" },
-              { type: "trainer" as const, label: "จอง PT", icon: "person" },
-              { type: "facility" as const, label: "จองพื้นที่", icon: "meeting_room" },
-            ] as const
-          ).map((item) => (
+          {[
+            { type: "class" as const, label: "จองคลาส", icon: "fitness_center" },
+            { type: "trainer" as const, label: "จอง PT", icon: "person" },
+            { type: "facility" as const, label: "จองพื้นที่", icon: "meeting_room" },
+          ]
+            .filter((item) => bookableTypes.includes(item.type))
+            .map((item) => (
             <button
               key={item.type}
               type="button"
@@ -442,7 +498,9 @@ export default function BookingsPage() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-1.5">
-            {typeTabs.map((t) => (
+            {typeTabs
+            .filter((t) => t.key === "all" || bookableTypes.includes(t.key))
+            .map((t) => (
               <button
                 key={t.key}
                 type="button"
@@ -625,8 +683,12 @@ export default function BookingsPage() {
         </div>
 
         {step === "type" && (
-          <div className="grid gap-3 sm:grid-cols-3">
-            {(["class", "trainer", "facility"] as BookingType[]).map((type) => {
+          <div
+            className={`grid gap-3 ${
+              bookableTypes.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"
+            }`}
+          >
+            {bookableTypes.map((type) => {
               const meta = bookingTypeMeta(type);
               return (
                 <button

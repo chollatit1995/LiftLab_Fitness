@@ -50,7 +50,12 @@ function pageTitle(pathname: string): string {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { hydrated: dataHydrated, usingDatabase } = useData();
+  const {
+    hydrated: dataHydrated,
+    usingDatabase,
+    permissionNotice,
+    dismissPermissionNotice,
+  } = useData();
   const [user, setUser] = useState<User | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -444,6 +449,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
 
         <main className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+          {permissionNotice && (
+            <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span className="material-symbols-outlined text-[20px]">lock</span>
+              <p className="min-w-0 flex-1">{permissionNotice}</p>
+              <button
+                type="button"
+                onClick={dismissPermissionNotice}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-100"
+              >
+                ปิด
+              </button>
+            </div>
+          )}
           {children}
         </main>
 
