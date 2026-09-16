@@ -61,7 +61,14 @@ function dateHeading(date: string, today: string): string {
 }
 
 export default function BookingsPage() {
-  const { data, updateData, hydrated } = useData();
+  const {
+    data,
+    updateData,
+    reloadData,
+    hydrated,
+    rejectedBookings,
+    dismissRejectedBookings,
+  } = useData();
   const [tab, setTab] = useState<BookingType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("confirmed");
   const [query, setQuery] = useState("");
@@ -73,6 +80,8 @@ export default function BookingsPage() {
   const [selectedTime, setSelectedTime] = useState("");
   const [memberId, setMemberId] = useState("");
   const [notes, setNotes] = useState("");
+  const [wizardError, setWizardError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const dates = useMemo(() => upcomingDates(BOOKING_HORIZON_DAYS), []);
   const dateGroups = useMemo(() => groupDatesByMonth(dates), [dates]);
@@ -145,6 +154,8 @@ export default function BookingsPage() {
     setSelectedTime("");
     setMemberId("");
     setNotes("");
+    setWizardError("");
+    setSubmitting(false);
   };
 
   const openWizard = (type?: BookingType) => {
@@ -154,6 +165,8 @@ export default function BookingsPage() {
       setStep("resource");
     }
     setModalOpen(true);
+    // ดึงข้อมูลล่าสุดก่อนเลือกเวลา — หน้านี้อาจเปิดค้างไว้จนพลาดการจองที่เข้ามาทาง portal
+    void reloadData();
   };
 
   const getResourceName = (): string => {
@@ -190,31 +203,74 @@ export default function BookingsPage() {
     return { available: true, label: "ว่าง" };
   };
 
-  const handleConfirm = () => {
+  /** ตรวจกับข้อมูลล่าสุดว่าช่วงเวลานี้ยังจองได้จริง — คืนข้อความผิดพลาดถ้าจองไม่ได้ */
+  const slotBlockedReason = (bookings: Booking[]): string => {
+    if (bookingType === "trainer") {
+      if (isTrainerSlotTaken(bookings, resourceId, selectedDate, selectedTime)) {
+        return "เทรนเนอร์ถูกจองในช่วงเวลานี้ไปแล้ว กรุณาเลือกเวลาอื่น";
+      }
+    }
+    if (bookingType === "class" && selectedClass) {
+      const { full } = classSlotAvailability(
+        bookings,
+        resourceId,
+        selectedDate,
+        selectedTime,
+        selectedClass.capacity
+      );
+      if (full) return "คลาสเต็มแล้วในช่วงเวลานี้ กรุณาเลือกเวลาอื่น";
+    }
+    return "";
+  };
+
+  const handleConfirm = async () => {
     const resourceName = getResourceName();
     if (!resourceName || !memberId || !selectedDate || !selectedTime) return;
-    if (isSlotInPast(selectedDate, selectedTime)) return;
+    setWizardError("");
+    if (isSlotInPast(selectedDate, selectedTime)) {
+      setWizardError("ไม่สามารถจองเวลาที่ผ่านมาแล้ว");
+      return;
+    }
 
-    const booking: Booking = {
-      id: generateId("b"),
-      type: bookingType,
-      memberId,
-      resourceId,
-      resourceName,
-      date: selectedDate,
-      time: selectedTime,
-      status: "confirmed",
-      notes: notes || undefined,
-    };
+    setSubmitting(true);
+    try {
+      /**
+       * ต้องเช็คกับข้อมูลสดจากฐานข้อมูลเสมอ
+       * หน้านี้ถือข้อมูลชุดที่โหลดตอนเปิดหน้า จึงมองไม่เห็นการจองที่เพิ่งเข้ามาทาง portal
+       * ถ้าดึงไม่สำเร็จให้ใช้ข้อมูลในมือไปก่อน แล้วปล่อยให้ฝั่งเซิร์ฟเวอร์ตัดสินอีกชั้น
+       */
+      const latest = await reloadData();
+      const reason = slotBlockedReason(latest?.bookings ?? data.bookings);
+      if (reason) {
+        setWizardError(reason);
+        setSelectedTime("");
+        setStep("datetime");
+        return;
+      }
 
-    updateData((prev) => ({
-      ...prev,
-      bookings: [booking, ...prev.bookings],
-    }));
+      const booking: Booking = {
+        id: generateId("b"),
+        type: bookingType,
+        memberId,
+        resourceId,
+        resourceName,
+        date: selectedDate,
+        time: selectedTime,
+        status: "confirmed",
+        notes: notes || undefined,
+      };
 
-    setModalOpen(false);
-    resetWizard();
-    setStatusFilter("confirmed");
+      updateData((prev) => ({
+        ...prev,
+        bookings: [booking, ...prev.bookings],
+      }));
+
+      setModalOpen(false);
+      resetWizard();
+      setStatusFilter("confirmed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const cancelBooking = (id: string) => {
@@ -279,6 +335,29 @@ export default function BookingsPage() {
           </button>
         }
       />
+
+      {rejectedBookings.length > 0 && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="material-symbols-outlined text-[20px]">error</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">บันทึกการจองไม่สำเร็จ</p>
+            <ul className="mt-1 space-y-0.5">
+              {rejectedBookings.map((b) => (
+                <li key={b.id}>
+                  {b.resourceName} · {formatDate(b.date)} {b.time} — {b.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <button
+            type="button"
+            onClick={dismissRejectedBookings}
+            className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-red-100"
+          >
+            ปิด
+          </button>
+        </div>
+      )}
 
       {/* Compact today strip */}
       <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm shadow-sm shadow-slate-200/40">
@@ -667,6 +746,7 @@ export default function BookingsPage() {
                           onClick={() => {
                             setSelectedDate(d);
                             setSelectedTime("");
+                            setWizardError("");
                           }}
                           className={`flex min-w-[4.75rem] shrink-0 flex-col items-center rounded-xl border-2 px-3 py-2 transition ${
                             selectedDate === d
@@ -705,7 +785,10 @@ export default function BookingsPage() {
                         key={time}
                         type="button"
                         disabled={!status.available}
-                        onClick={() => setSelectedTime(time)}
+                        onClick={() => {
+                          setSelectedTime(time);
+                          setWizardError("");
+                        }}
                         className={`rounded-xl border-2 px-2 py-2.5 text-sm transition ${
                           selectedTime === time
                             ? "border-brand-500 bg-brand-50 font-semibold text-brand-700"
@@ -725,6 +808,12 @@ export default function BookingsPage() {
                   })}
                 </div>
               </div>
+            )}
+
+            {wizardError && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {wizardError}
+              </p>
             )}
 
             <div className="flex gap-3">
@@ -831,16 +920,28 @@ export default function BookingsPage() {
                 )}
               </div>
             </div>
+            {wizardError && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {wizardError}
+              </p>
+            )}
+
             <div className="flex gap-3">
               <button
                 type="button"
                 className="btn-secondary"
+                disabled={submitting}
                 onClick={() => setStep("member")}
               >
                 ย้อนกลับ
               </button>
-              <button type="button" className="btn-primary flex-1" onClick={handleConfirm}>
-                ยืนยันการจอง
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                disabled={submitting}
+                onClick={handleConfirm}
+              >
+                {submitting ? "กำลังตรวจสอบ..." : "ยืนยันการจอง"}
               </button>
             </div>
           </div>

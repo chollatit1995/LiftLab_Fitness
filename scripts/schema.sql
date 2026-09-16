@@ -79,6 +79,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   notes TEXT
 );
 
+-- เทรนเนอร์ 1 คน รับได้ 1 การจองที่ยังยืนยันอยู่ ต่อ 1 วัน+เวลา
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_trainer_slot_unique
+  ON bookings (resource_id, date, time)
+  WHERE type = 'trainer' AND status = 'confirmed';
+
 CREATE TABLE IF NOT EXISTS sales (
   id TEXT PRIMARY KEY,
   member_id TEXT NOT NULL,

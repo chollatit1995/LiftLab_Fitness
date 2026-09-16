@@ -151,6 +151,39 @@ export function isTrainerSlotTaken(
   return countSlotBookings(bookings, trainerId, date, time) > 0;
 }
 
+/** คีย์ของช่วงเวลาเทรนเนอร์ — เทรนเนอร์ + วัน + เวลา */
+export function trainerSlotKey(resourceId: string, date: string, time: string): string {
+  return `${resourceId}|${date.slice(0, 10)}|${time}`;
+}
+
+/**
+ * หาการจอง PT ที่ชนกัน — เทรนเนอร์คนเดียว วัน+เวลาเดียวกัน แต่มีมากกว่า 1 รายการที่ยังยืนยันอยู่
+ * คืนเฉพาะ "รายการส่วนเกิน" ของแต่ละช่วงเวลา (รายการที่ได้สิทธิ์ถือ slot จะไม่ถูกคืนออกมา)
+ * hasPriority ใช้ระบุว่ารายการไหนได้สิทธิ์ก่อน เช่น รายการที่บันทึกลงฐานข้อมูลไปแล้ว
+ */
+export function findTrainerSlotConflicts<
+  T extends Pick<Booking, "id" | "type" | "resourceId" | "date" | "time" | "status">
+>(bookings: T[], hasPriority: (booking: T) => boolean = () => false): T[] {
+  const groups = new Map<string, T[]>();
+  for (const booking of bookings) {
+    if (booking.type !== "trainer" || booking.status !== "confirmed") continue;
+    const key = trainerSlotKey(booking.resourceId, booking.date, booking.time);
+    const list = groups.get(key) ?? [];
+    list.push(booking);
+    groups.set(key, list);
+  }
+
+  const conflicts: T[] = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const winner = list.find(hasPriority) ?? list[0];
+    for (const booking of list) {
+      if (booking !== winner) conflicts.push(booking);
+    }
+  }
+  return conflicts;
+}
+
 export function classSlotAvailability(
   bookings: Pick<Booking, "resourceId" | "date" | "time" | "status">[],
   classId: string,

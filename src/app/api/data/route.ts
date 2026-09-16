@@ -36,8 +36,11 @@ export async function PUT(request: Request) {
 
   try {
     const data = (await request.json()) as AppData;
-    await persistAppData(data);
-    return NextResponse.json({ ok: true });
+    const result = await persistAppData(data);
+    return NextResponse.json({
+      ok: true,
+      rejectedBookings: result.rejectedBookings,
+    });
   } catch (error) {
     console.error("PUT /api/data failed:", error);
     return NextResponse.json(

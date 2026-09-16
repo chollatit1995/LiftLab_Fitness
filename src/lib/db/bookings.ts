@@ -93,6 +93,15 @@ export async function loadBookingCatalog(): Promise<BookingCatalog> {
   });
 }
 
+/** postgres error code 23505 = unique_violation */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: string }).code === "23505"
+  );
+}
+
 export type CreateBookingResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
@@ -205,13 +214,21 @@ export async function createMemberBooking(input: {
     }
 
     const id = `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    await sql`
-      INSERT INTO bookings (id, type, member_id, resource_id, resource_name, date, time, status, notes)
-      VALUES (
-        ${id}, ${input.type}, ${input.memberId}, ${input.resourceId},
-        ${input.resourceName}, ${input.date}, ${input.time}, 'confirmed', ${input.notes ?? null}
-      )
-    `;
+    try {
+      await sql`
+        INSERT INTO bookings (id, type, member_id, resource_id, resource_name, date, time, status, notes)
+        VALUES (
+          ${id}, ${input.type}, ${input.memberId}, ${input.resourceId},
+          ${input.resourceName}, ${input.date}, ${input.time}, 'confirmed', ${input.notes ?? null}
+        )
+      `;
+    } catch (error) {
+      // unique index กันจองซ้ำ — เกิดเมื่อมีคนกดจองช่วงเวลาเดียวกันพร้อมกัน
+      if (isUniqueViolation(error)) {
+        return { ok: false, error: "เทรนเนอร์ไม่ว่างในช่วงเวลานี้" };
+      }
+      throw error;
+    }
     return { ok: true, id };
   });
 }

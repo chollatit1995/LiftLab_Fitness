@@ -163,3 +163,14 @@ export const SCHEMA_STATEMENTS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 ];
+
+/**
+ * ข้อบังคับที่อาจสร้างไม่สำเร็จถ้ามีข้อมูลเก่าที่ชนกันอยู่แล้ว
+ * จึงรันแยกแบบ best-effort — ถ้าพลาดให้ล็อกเตือนแต่ไม่ล้มทั้งระบบ
+ * เทรนเนอร์ 1 คน รับได้ 1 การจองที่ยังยืนยันอยู่ ต่อ 1 วัน+เวลา
+ */
+export const SCHEMA_CONSTRAINT_STATEMENTS = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS bookings_trainer_slot_unique
+     ON bookings (resource_id, date, time)
+     WHERE type = 'trainer' AND status = 'confirmed'`,
+];

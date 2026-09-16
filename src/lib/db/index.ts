@@ -1,9 +1,10 @@
 import { AppData } from "../types";
 import { initialData } from "../store";
-import { SCHEMA_STATEMENTS } from "./schema";
+import { SCHEMA_CONSTRAINT_STATEMENTS, SCHEMA_STATEMENTS } from "./schema";
 import { toISODate } from "../dates";
 import { withDb } from "./client";
-import { mergeById, mergeRenewals } from "./merge";
+import { mergeBookings, mergeRenewals } from "./merge";
+import { findTrainerSlotConflicts } from "../bookings";
 import { mapRenewalRow } from "./renewals";
 
 export { isDbConfigured, getDatabaseUrl } from "./client";
@@ -11,6 +12,17 @@ export { isDbConfigured, getDatabaseUrl } from "./client";
 export async function ensureSchema(sql: ReturnType<typeof import("postgres")>): Promise<void> {
   for (const statement of SCHEMA_STATEMENTS) {
     await sql.unsafe(statement);
+  }
+  // index กันจองซ้ำสร้างไม่ได้ถ้ามีข้อมูลเก่าที่ชนกันค้างอยู่ — เตือนไว้แต่ต้องไม่ล้มทั้งระบบ
+  for (const statement of SCHEMA_CONSTRAINT_STATEMENTS) {
+    try {
+      await sql.unsafe(statement);
+    } catch (error) {
+      console.warn(
+        "ข้ามการสร้าง constraint เพราะมีข้อมูลเดิมที่ชนกันอยู่ — ต้องแก้ข้อมูลซ้ำก่อน:",
+        String(error)
+      );
+    }
   }
 }
 
@@ -364,19 +376,65 @@ export async function getOrInitAppData(): Promise<AppData> {
   return data;
 }
 
+export interface RejectedBooking {
+  id: string;
+  resourceName: string;
+  date: string;
+  time: string;
+  reason: string;
+}
+
+export interface PersistResult {
+  /** การจองที่ client ส่งมาแต่บันทึกไม่ได้เพราะช่วงเวลาถูกจองไปแล้ว */
+  rejectedBookings: RejectedBooking[];
+}
+
 /** บันทึกพร้อม merge ข้อมูลจาก DB ก่อน — ป้องกัน booking/renewal จาก portal หาย */
-export async function persistAppData(data: AppData): Promise<void> {
+export async function persistAppData(data: AppData): Promise<PersistResult> {
   return withDb(async (sql) => {
     await ensureSchema(sql);
     const existing = await loadAppData(sql);
+    const bookings = mergeBookings(existing.bookings, data.bookings);
+
+    /**
+     * ฐานข้อมูลคือตัวตัดสิน — รายการที่ยืนยันไว้ใน DB แล้วได้สิทธิ์ถือช่วงเวลาก่อน
+     * หน้าแอดมินถือข้อมูลเก่าตั้งแต่ตอนเปิดหน้า จึงมองไม่เห็นการจองที่เพิ่งเข้ามาทาง portal
+     */
+    const incumbentIds = new Set(
+      existing.bookings.filter((b) => b.status === "confirmed").map((b) => b.id)
+    );
+    const existingIds = new Set(existing.bookings.map((b) => b.id));
+    const conflicts = findTrainerSlotConflicts(bookings, (b) => incumbentIds.has(b.id));
+
+    // ตัดได้เฉพาะรายการที่ยังไม่เคยลง DB — รายการเก่าที่ซ้ำกันอยู่แล้วต้องให้คนตัดสินใจเอง
+    const rejected = conflicts.filter((b) => !existingIds.has(b.id));
+    const rejectedIds = new Set(rejected.map((b) => b.id));
+    const stale = conflicts.filter((b) => existingIds.has(b.id));
+    if (stale.length > 0) {
+      console.warn(
+        `พบการจอง PT ซ้ำช่วงเวลาที่ค้างอยู่ในฐานข้อมูล ${stale.length} รายการ — ต้องยกเลิกรายการที่ไม่ต้องการด้วยตนเอง:`,
+        stale.map((b) => `${b.id} ${b.resourceName} ${b.date} ${b.time}`)
+      );
+    }
+
     const merged: AppData = {
       ...data,
-      bookings: mergeById(existing.bookings, data.bookings),
+      bookings: bookings.filter((b) => !rejectedIds.has(b.id)),
       membershipRenewals: mergeRenewals(
         existing.membershipRenewals,
         data.membershipRenewals ?? []
       ),
     };
     await saveAppData(merged, sql);
+
+    return {
+      rejectedBookings: rejected.map((b) => ({
+        id: b.id,
+        resourceName: b.resourceName,
+        date: b.date,
+        time: b.time,
+        reason: "เทรนเนอร์ถูกจองในช่วงเวลานี้ไปแล้ว",
+      })),
+    };
   });
 }

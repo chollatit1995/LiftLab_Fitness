@@ -13,13 +13,25 @@ import { usePathname } from "next/navigation";
 import { AppData } from "./types";
 import { initialData, loadData, saveData, withDefaults } from "./store";
 
+/** การจองที่ฝั่งเซิร์ฟเวอร์ปฏิเสธเพราะช่วงเวลาถูกจองตัดหน้าไปแล้ว */
+export interface RejectedBooking {
+  id: string;
+  resourceName: string;
+  date: string;
+  time: string;
+  reason: string;
+}
+
 interface DataContextValue {
   data: AppData;
   updateData: (updater: (prev: AppData) => AppData) => void;
   resetData: () => void;
-  reloadData: () => Promise<void>;
+  /** ดึงข้อมูลล่าสุดจากฐานข้อมูล แล้วคืนค่าที่ได้ (null = ดึงไม่สำเร็จ) */
+  reloadData: () => Promise<AppData | null>;
   hydrated: boolean;
   usingDatabase: boolean;
+  rejectedBookings: RejectedBooking[];
+  dismissRejectedBookings: () => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -54,16 +66,23 @@ async function fetchFromApi(): Promise<AppData | null> {
   }
 }
 
-async function saveToApi(data: AppData): Promise<boolean> {
+async function saveToApi(
+  data: AppData
+): Promise<{ ok: boolean; rejectedBookings: RejectedBooking[] }> {
   try {
     const res = await fetch("/api/data", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    return res.ok;
+    if (!res.ok) return { ok: false, rejectedBookings: [] };
+    const json = await res.json().catch(() => null);
+    return {
+      ok: true,
+      rejectedBookings: (json?.rejectedBookings as RejectedBooking[]) ?? [],
+    };
   } catch {
-    return false;
+    return { ok: false, rejectedBookings: [] };
   }
 }
 
@@ -72,6 +91,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(initialData);
   const [hydrated, setHydrated] = useState(false);
   const [usingDatabase, setUsingDatabase] = useState(false);
+  const [rejectedBookings, setRejectedBookings] = useState<RejectedBooking[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** มีการแก้ไขที่ยังบันทึกลงฐานข้อมูลไม่สำเร็จหรือยัง */
   const unsavedRef = useRef(false);
@@ -133,11 +153,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     unsavedRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      const saved = await saveToApi(next);
-      unsavedRef.current = !saved;
-      setUsingDatabase(saved);
+      const { ok, rejectedBookings: rejected } = await saveToApi(next);
+      unsavedRef.current = !ok;
+      setUsingDatabase(ok);
+      if (!ok || rejected.length === 0) return;
+
+      // เซิร์ฟเวอร์ไม่รับการจองบางรายการ — ต้องดึงของจริงมาแสดงแทนที่จะปล่อยให้เห็นรายการที่ไม่มีอยู่
+      setRejectedBookings(rejected);
+      const fresh = await fetchFromApi();
+      if (fresh) {
+        setData(fresh);
+        saveData(fresh);
+      }
     }, 400);
   }, []);
+
+  const dismissRejectedBookings = useCallback(() => setRejectedBookings([]), []);
 
   const updateData = useCallback(
     (updater: (prev: AppData) => AppData) => {
@@ -150,15 +181,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [persist]
   );
 
-  const reloadData = useCallback(async () => {
-    if (!shouldFetchStaffDataApi(pathnameRef.current)) return;
+  const reloadData = useCallback(async (): Promise<AppData | null> => {
+    if (!shouldFetchStaffDataApi(pathnameRef.current)) return null;
     const apiData = await fetchFromApi();
-    if (apiData) {
-      setData(apiData);
-      saveData(apiData);
-      setUsingDatabase(true);
-      unsavedRef.current = false;
-    }
+    if (!apiData) return null;
+    setData(apiData);
+    saveData(apiData);
+    setUsingDatabase(true);
+    unsavedRef.current = false;
+    return apiData;
   }, []);
 
   const resetData = useCallback(() => {
@@ -168,7 +199,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   return (
     <DataContext.Provider
-      value={{ data, updateData, resetData, reloadData, hydrated, usingDatabase }}
+      value={{
+        data,
+        updateData,
+        resetData,
+        reloadData,
+        hydrated,
+        usingDatabase,
+        rejectedBookings,
+        dismissRejectedBookings,
+      }}
     >
       {children}
     </DataContext.Provider>
