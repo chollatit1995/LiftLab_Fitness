@@ -1,4 +1,4 @@
-import { Booking, BookingType, FitnessClass } from "./types";
+import { Booking, BookingType, CancelledByRole, FitnessClass } from "./types";
 import { todayISO } from "./dates";
 
 /** ช่วงเวลามาตรฐานสำหรับจอง PT */
@@ -182,6 +182,50 @@ export function findTrainerSlotConflicts<
     }
   }
   return conflicts;
+}
+
+export interface CancelActor {
+  name: string;
+  role: CancelledByRole;
+}
+
+/**
+ * ประทับร่องรอยการยกเลิกจากฝั่งเซิร์ฟเวอร์เท่านั้น
+ * ค่าที่ client ส่งมาถูกทิ้งเสมอ ไม่งั้นใครก็ปลอมชื่อผู้ยกเลิกได้ด้วยการยิง API ตรง
+ */
+export function stampCancellations(
+  bookings: Booking[],
+  existing: Booking[],
+  actor: CancelActor | null
+): Booking[] {
+  const priorById = new Map(existing.map((b) => [b.id, b]));
+  const now = new Date().toISOString();
+
+  return bookings.map((booking) => {
+    if (booking.status !== "cancelled") {
+      const { cancelledBy: _by, cancelledByRole: _role, cancelledAt: _at, ...rest } = booking;
+      return rest;
+    }
+
+    const prior = priorById.get(booking.id);
+    // ยกเลิกไปก่อนหน้านี้แล้ว — คงของเดิมไว้ ไม่ยัดชื่อคนที่บังเอิญกดบันทึกทีหลัง
+    if (prior?.status === "cancelled") {
+      return {
+        ...booking,
+        cancelledBy: prior.cancelledBy,
+        cancelledByRole: prior.cancelledByRole,
+        cancelledAt: prior.cancelledAt,
+      };
+    }
+
+    // เพิ่งถูกยกเลิกในรอบบันทึกนี้
+    return {
+      ...booking,
+      cancelledBy: actor?.name,
+      cancelledByRole: actor?.role,
+      cancelledAt: now,
+    };
+  });
 }
 
 export function classSlotAvailability(

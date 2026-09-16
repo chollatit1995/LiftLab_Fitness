@@ -121,6 +121,9 @@ export const SCHEMA_STATEMENTS = [
     renewed_at DATE NOT NULL,
     renewed_by TEXT
   )`,
+  `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_by TEXT`,
+  `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_by_role TEXT`,
+  `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`,
   `ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_amount NUMERIC`,
   `ALTER TABLE sales ADD COLUMN IF NOT EXISTS promotion_id TEXT`,
   `ALTER TABLE membership_packages ADD COLUMN IF NOT EXISTS session_limit INTEGER`,

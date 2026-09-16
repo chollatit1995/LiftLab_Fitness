@@ -80,7 +80,11 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const result = await cancelMemberBooking(session.memberId, bookingId);
+    const result = await cancelMemberBooking(
+      session.memberId,
+      bookingId,
+      session.name
+    );
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }

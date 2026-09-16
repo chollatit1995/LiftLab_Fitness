@@ -78,7 +78,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   date DATE NOT NULL,
   time TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'confirmed',
-  notes TEXT
+  notes TEXT,
+  -- ร่องรอยการยกเลิก: ใครกด บทบาทอะไร เมื่อไร
+  cancelled_by TEXT,
+  cancelled_by_role TEXT,
+  cancelled_at TIMESTAMPTZ
 );
 
 -- เทรนเนอร์ 1 คน รับได้ 1 การจองที่ยังยืนยันอยู่ ต่อ 1 วัน+เวลา

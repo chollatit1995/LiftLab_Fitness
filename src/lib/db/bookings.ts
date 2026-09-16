@@ -235,12 +235,16 @@ export async function createMemberBooking(input: {
 
 export async function cancelMemberBooking(
   memberId: string,
-  bookingId: string
+  bookingId: string,
+  memberName: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withDb(async (sql) => {
     const rows = await sql`
       UPDATE bookings
-      SET status = 'cancelled'
+      SET status = 'cancelled',
+          cancelled_by = ${memberName},
+          cancelled_by_role = 'member',
+          cancelled_at = NOW()
       WHERE id = ${bookingId} AND member_id = ${memberId} AND status = 'confirmed'
       RETURNING id
     `;

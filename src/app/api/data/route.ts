@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { AppData } from "@/lib/types";
 import {
+  CancelActor,
   getOrInitAppData,
   isDbConfigured,
   persistAppData,
 } from "@/lib/db";
+import { getServerSession } from "@/lib/auth-server";
+import { isValidRole } from "@/lib/permissions";
 
 export async function GET() {
   if (!isDbConfigured()) {
@@ -36,7 +39,15 @@ export async function PUT(request: Request) {
 
   try {
     const data = (await request.json()) as AppData;
-    const result = await persistAppData(data);
+
+    // ต้องอ่านผู้ใช้จาก session ฝั่งเซิร์ฟเวอร์ ไม่ใช่จาก payload ที่ client ส่งมา
+    const session = await getServerSession();
+    const actor: CancelActor | null =
+      session && isValidRole(session.role)
+        ? { name: session.name, role: session.role }
+        : null;
+
+    const result = await persistAppData(data, actor);
     return NextResponse.json({
       ok: true,
       rejectedBookings: result.rejectedBookings,

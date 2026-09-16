@@ -21,11 +21,12 @@ import {
 import {
   generateId,
   formatDate,
+  formatDateTime,
   statusColors,
   bookingTypeLabels,
   formatCurrency,
 } from "@/lib/store";
-import { Booking, BookingType } from "@/lib/types";
+import { Booking, BookingType, CancelledByRole } from "@/lib/types";
 import { hasSessionQuota } from "@/lib/sessions";
 import { todayISO } from "@/lib/dates";
 
@@ -51,6 +52,27 @@ const statusLabel: Record<Booking["status"], string> = {
   cancelled: "ยกเลิก",
   completed: "เสร็จสิ้น",
 };
+
+const cancelledByRoleLabels: Record<CancelledByRole, string> = {
+  member: "สมาชิก",
+  admin: "ผู้ดูแลระบบ",
+  manager: "ผู้จัดการ",
+  staff: "พนักงาน",
+  trainer: "เทรนเนอร์",
+};
+
+/** บรรทัดบอกว่าใครยกเลิกและเมื่อไร — การจองเก่าก่อนมีระบบนี้จะไม่มีข้อมูล */
+function cancellationNote(booking: Booking): string | null {
+  if (booking.status !== "cancelled") return null;
+  if (!booking.cancelledBy && !booking.cancelledAt) return null;
+
+  const role = booking.cancelledByRole
+    ? `${cancelledByRoleLabels[booking.cancelledByRole]} `
+    : "";
+  const who = booking.cancelledBy ? `${role}${booking.cancelledBy}` : "ไม่ทราบผู้ยกเลิก";
+  const when = booking.cancelledAt ? formatDateTime(booking.cancelledAt) : "";
+  return when ? `ยกเลิกโดย ${who} · ${when}` : `ยกเลิกโดย ${who}`;
+}
 
 function dateHeading(date: string, today: string): string {
   if (date === today) return "วันนี้";
@@ -507,6 +529,14 @@ export default function BookingsPage() {
                           {member?.name ?? "—"}
                           {booking.notes ? ` · ${booking.notes}` : ""}
                         </p>
+                        {cancellationNote(booking) && (
+                          <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+                            <span className="material-symbols-outlined text-[13px]">
+                              history
+                            </span>
+                            <span className="truncate">{cancellationNote(booking)}</span>
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 sm:justify-end">

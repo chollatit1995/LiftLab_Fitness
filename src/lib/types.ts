@@ -81,7 +81,15 @@ export interface Booking {
   time: string;
   status: "confirmed" | "cancelled" | "completed";
   notes?: string;
+  /** ร่องรอยการยกเลิก — เขียนโดยฝั่งเซิร์ฟเวอร์เท่านั้น ห้ามเชื่อค่าที่ client ส่งมา */
+  cancelledBy?: string;
+  cancelledByRole?: CancelledByRole;
+  /** ISO timestamp */
+  cancelledAt?: string;
 }
+
+/** สมาชิกยกเลิกเองผ่าน portal หรือพนักงานยกเลิกให้จากหลังบ้าน */
+export type CancelledByRole = "member" | "admin" | "manager" | "staff" | "trainer";
 
 export interface Facility {
   id: string;

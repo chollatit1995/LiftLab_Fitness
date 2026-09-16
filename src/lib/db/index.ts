@@ -1,13 +1,18 @@
-import { AppData } from "../types";
+import { AppData, CancelledByRole } from "../types";
 import { initialData } from "../store";
 import { SCHEMA_CONSTRAINT_STATEMENTS, SCHEMA_STATEMENTS } from "./schema";
 import { toISODate } from "../dates";
 import { withDb } from "./client";
 import { mergeBookings, mergeRenewals } from "./merge";
-import { findTrainerSlotConflicts } from "../bookings";
+import {
+  CancelActor,
+  findTrainerSlotConflicts,
+  stampCancellations,
+} from "../bookings";
 import { mapRenewalRow } from "./renewals";
 
 export { isDbConfigured, getDatabaseUrl } from "./client";
+export type { CancelActor } from "../bookings";
 
 export async function ensureSchema(sql: ReturnType<typeof import("postgres")>): Promise<void> {
   for (const statement of SCHEMA_STATEMENTS) {
@@ -40,7 +45,7 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
   const promotions = await sql`SELECT id, title, description, discount_type, discount_value, package_id, code, start_date, end_date, status, highlight FROM promotions ORDER BY highlight DESC, end_date`;
   const members = await sql`SELECT id, name, email, phone, package_id, joined_at, expires_at, status, sessions_total, sessions_used FROM members ORDER BY joined_at DESC`;
   const facilities = await sql`SELECT id, name, type, capacity, status FROM facilities ORDER BY name`;
-  const bookings = await sql`SELECT id, type, member_id, resource_id, resource_name, date, time, status, notes FROM bookings ORDER BY date DESC, time DESC`;
+  const bookings = await sql`SELECT id, type, member_id, resource_id, resource_name, date, time, status, notes, cancelled_by, cancelled_by_role, cancelled_at FROM bookings ORDER BY date DESC, time DESC`;
   const sales = await sql`SELECT id, member_id, member_name, item, amount, date, type, original_amount, promotion_id FROM sales ORDER BY date DESC`;
 
   let renewalRows: Record<string, unknown>[] = [];
@@ -132,6 +137,12 @@ export async function loadAppData(sql: ReturnType<typeof import("postgres")>): P
       time: r.time as string,
       status: r.status as AppData["bookings"][0]["status"],
       notes: (r.notes as string | null) ?? undefined,
+      cancelledBy: (r.cancelled_by as string | null) ?? undefined,
+      cancelledByRole:
+        (r.cancelled_by_role as CancelledByRole | null) ?? undefined,
+      cancelledAt: r.cancelled_at
+        ? new Date(r.cancelled_at as string).toISOString()
+        : undefined,
     })),
     sales: sales.map((r) => ({
       id: r.id as string,
@@ -322,8 +333,8 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
     );
     for (const b of data.bookings) {
       await tx`
-        INSERT INTO bookings (id, type, member_id, resource_id, resource_name, date, time, status, notes)
-        VALUES (${b.id}, ${b.type}, ${b.memberId}, ${b.resourceId}, ${b.resourceName}, ${b.date}, ${b.time}, ${b.status}, ${b.notes ?? null})
+        INSERT INTO bookings (id, type, member_id, resource_id, resource_name, date, time, status, notes, cancelled_by, cancelled_by_role, cancelled_at)
+        VALUES (${b.id}, ${b.type}, ${b.memberId}, ${b.resourceId}, ${b.resourceName}, ${b.date}, ${b.time}, ${b.status}, ${b.notes ?? null}, ${b.cancelledBy ?? null}, ${b.cancelledByRole ?? null}, ${b.cancelledAt ?? null})
         ON CONFLICT (id) DO UPDATE SET
           type = EXCLUDED.type,
           member_id = EXCLUDED.member_id,
@@ -332,7 +343,10 @@ export async function saveAppData(data: AppData, sql: ReturnType<typeof import("
           date = EXCLUDED.date,
           time = EXCLUDED.time,
           status = EXCLUDED.status,
-          notes = EXCLUDED.notes
+          notes = EXCLUDED.notes,
+          cancelled_by = EXCLUDED.cancelled_by,
+          cancelled_by_role = EXCLUDED.cancelled_by_role,
+          cancelled_at = EXCLUDED.cancelled_at
       `;
     }
 
@@ -390,11 +404,18 @@ export interface PersistResult {
 }
 
 /** บันทึกพร้อม merge ข้อมูลจาก DB ก่อน — ป้องกัน booking/renewal จาก portal หาย */
-export async function persistAppData(data: AppData): Promise<PersistResult> {
+export async function persistAppData(
+  data: AppData,
+  actor: CancelActor | null = null
+): Promise<PersistResult> {
   return withDb(async (sql) => {
     await ensureSchema(sql);
     const existing = await loadAppData(sql);
-    const bookings = mergeBookings(existing.bookings, data.bookings);
+    const bookings = stampCancellations(
+      mergeBookings(existing.bookings, data.bookings),
+      existing.bookings,
+      actor
+    );
 
     /**
      * ฐานข้อมูลคือตัวตัดสิน — รายการที่ยืนยันไว้ใน DB แล้วได้สิทธิ์ถือช่วงเวลาก่อน

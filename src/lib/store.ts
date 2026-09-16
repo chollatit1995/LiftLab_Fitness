@@ -425,6 +425,19 @@ export function formatDate(date: string): string {
   }).format(new Date(iso + "T12:00:00"));
 }
 
+/** วันที่ + เวลา สำหรับ timestamp เช่น เวลาที่ยกเลิกการจอง */
+export function formatDateTime(isoTimestamp: string): string {
+  const d = new Date(isoTimestamp);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
 export const roleLabels: Record<string, { th: string; en: string }> = {
   admin: { th: "ผู้ดูแลระบบ", en: "Admin" },
   manager: { th: "ผู้จัดการ", en: "Manager" },
