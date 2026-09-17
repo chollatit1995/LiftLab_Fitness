@@ -5,17 +5,17 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
 import { useData } from "@/lib/data-context";
-import { daysUntil, todayISO } from "@/lib/dates";
+import { todayISO } from "@/lib/dates";
 import {
+  EXPIRING_SOON_DAYS,
   formatCurrency,
   formatDate,
+  isExpiringSoon,
   statusColors,
   bookingTypeLabels,
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
 import Link from "next/link";
-
-const EXPIRING_SOON_DAYS = 7;
 
 function greetingFor(hour: number): string {
   if (hour < 12) return "สวัสดีตอนเช้า";
@@ -75,11 +75,7 @@ export default function DashboardPage() {
 
   const alerts = useMemo(() => {
     const today = todayISO();
-    const expiringSoon = data.members.filter((m) => {
-      if (m.status !== "active") return false;
-      const left = daysUntil(m.expiresAt, today);
-      return left >= 0 && left <= EXPIRING_SOON_DAYS;
-    });
+    const expiringSoon = data.members.filter((m) => isExpiringSoon(m, today));
     const expired = data.members.filter((m) => m.status === "expired");
     const todayBookings = data.bookings.filter(
       (b) => b.date === today && b.status === "confirmed"

@@ -8,9 +8,11 @@ import { PasswordField } from "@/components/PasswordField";
 import { useData } from "@/lib/data-context";
 import { daysUntil, todayISO, toISODate } from "@/lib/dates";
 import {
+  EXPIRING_SOON_DAYS,
   formatCurrency,
   formatDate,
   generateId,
+  isExpiringSoon,
   statusColors,
 } from "@/lib/store";
 import { can } from "@/lib/permissions";
@@ -30,7 +32,7 @@ import {
 import { Member, MembershipRenewal, Sale } from "@/lib/types";
 
 type MemberStatus = Member["status"];
-type StatusFilter = "all" | MemberStatus;
+type StatusFilter = "all" | MemberStatus | "expiringSoon";
 
 const emptyForm = {
   name: "",
@@ -156,20 +158,26 @@ export default function MembersPage() {
 
   const activePackages = data.packages.filter((p) => p.status === "active");
 
-  const counts = useMemo(
-    () => ({
+  const counts = useMemo(() => {
+    const today = todayISO();
+    return {
       all: data.members.length,
       active: data.members.filter((m) => m.status === "active").length,
       pending: data.members.filter((m) => m.status === "pending").length,
+      expiringSoon: data.members.filter((m) => isExpiringSoon(m, today)).length,
       expired: data.members.filter((m) => m.status === "expired").length,
-    }),
-    [data.members]
-  );
+    };
+  }, [data.members]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const today = todayISO();
     return data.members
-      .filter((m) => (statusFilter === "all" ? true : m.status === statusFilter))
+      .filter((m) => {
+        if (statusFilter === "all") return true;
+        if (statusFilter === "expiringSoon") return isExpiringSoon(m, today);
+        return m.status === statusFilter;
+      })
       .filter((m) => {
         if (!q) return true;
         const pkg = data.packages.find((p) => p.id === m.packageId);
@@ -181,7 +189,11 @@ export default function MembersPage() {
           (pkg?.name.toLowerCase().includes(q) ?? false)
         );
       })
-      .sort((a, b) => b.joinedAt.localeCompare(a.joinedAt));
+      .sort((a, b) =>
+        statusFilter === "expiringSoon"
+          ? a.expiresAt.localeCompare(b.expiresAt)
+          : b.joinedAt.localeCompare(a.joinedAt)
+      );
   }, [data.members, data.packages, search, statusFilter]);
 
   const openCreate = () => {
@@ -421,7 +433,7 @@ export default function MembersPage() {
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {(
           [
             { key: "all" as const, label: "ทั้งหมด", color: "text-slate-900" },
@@ -436,6 +448,11 @@ export default function MembersPage() {
               color: "text-amber-600",
             },
             {
+              key: "expiringSoon" as const,
+              label: "ใกล้หมดอายุ",
+              color: "text-orange-500",
+            },
+            {
               key: "expired" as const,
               label: "หมดอายุ",
               color: "text-red-500",
@@ -446,6 +463,11 @@ export default function MembersPage() {
             key={item.key}
             type="button"
             onClick={() => setStatusFilter(item.key)}
+            title={
+              item.key === "expiringSoon"
+                ? `เหลือไม่เกิน ${EXPIRING_SOON_DAYS} วัน`
+                : undefined
+            }
             className={`card p-4 text-center transition ${
               statusFilter === item.key
                 ? "ring-2 ring-brand-500 ring-offset-1"

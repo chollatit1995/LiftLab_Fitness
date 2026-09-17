@@ -1,5 +1,5 @@
-import { AppData } from "./types";
-import { toISODate } from "./dates";
+import { AppData, Member } from "./types";
+import { daysUntil, toISODate, todayISO } from "./dates";
 
 export const STORAGE_KEY = "liftlab-fitness-data";
 
@@ -401,6 +401,16 @@ export function loadData(): AppData {
 export function saveData(data: AppData): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+/** สมาชิกที่เหลืออายุไม่เกินกี่วันถือว่า "ใกล้หมดอายุ" */
+export const EXPIRING_SOON_DAYS = 7;
+
+/** สมาชิกที่ยังใช้งานอยู่ และเหลืออายุ 0–EXPIRING_SOON_DAYS วัน */
+export function isExpiringSoon(member: Member, today = todayISO()): boolean {
+  if (member.status !== "active") return false;
+  const left = daysUntil(member.expiresAt, today);
+  return left >= 0 && left <= EXPIRING_SOON_DAYS;
 }
 
 export function generateId(prefix: string): string {
