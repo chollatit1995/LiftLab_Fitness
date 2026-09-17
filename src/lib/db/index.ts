@@ -15,6 +15,7 @@ import {
   AppDataCollection,
   blockedCollections,
   restrictBookingsToTrainer,
+  restrictMembersToSessionUsage,
 } from "../data-authz";
 import { mapRenewalRow } from "./renewals";
 
@@ -453,6 +454,17 @@ export async function persistAppData(
       );
       authorized.bookings = restricted.bookings;
       blockedBookings = restricted.blocked;
+
+      // เทรนเนอร์แก้สมาชิกไม่ได้ เหลือช่องเดียวคือครั้ง PT ที่ถูกตัดตอนปิดคิว
+      const members = restrictMembersToSessionUsage(
+        authorized.members,
+        existing.members
+      );
+      authorized.members = members.members;
+      if (members.blocked && !blocked.includes("members")) {
+        blocked.push("members");
+        console.warn('ปฏิเสธการแก้ไขข้อมูลสมาชิกของ role "trainer" (แก้ได้เฉพาะครั้ง PT)');
+      }
     }
 
     const bookings = stampCancellations(

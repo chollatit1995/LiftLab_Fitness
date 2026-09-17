@@ -1,5 +1,6 @@
-import { AppData, Booking } from "./types";
+import { AppData, Booking, Member } from "./types";
 import { AppUserRole } from "./user-types";
+import { hasSessionQuota } from "./sessions";
 
 export type AppDataCollection = keyof AppData;
 
@@ -8,11 +9,13 @@ export type AppDataCollection = keyof AppData;
  * หน้าเว็บซ่อนเมนูให้อยู่แล้ว ชั้นนี้บังคับเรื่องเดียวกันกับคนที่ยิง API ตรง
  */
 const COLLECTION_EDITORS: Record<AppDataCollection, AppUserRole[]> = {
-  // /bookings และ /members เปิดให้เทรนเนอร์ด้วย
+  // /bookings และ /members เปิดให้เทรนเนอร์ด้วย แต่ถูกจำกัดต่ออีกชั้นด้านล่าง
+  // (restrictBookingsToTrainer / restrictMembersToSessionUsage)
   bookings: ["admin", "manager", "staff", "trainer"],
   members: ["admin", "manager", "staff", "trainer"],
-  membershipRenewals: ["admin", "manager", "staff", "trainer"],
-  sales: ["admin", "manager", "staff", "trainer"],
+  // ต่ออายุและยอดขายเป็นงานหน้าเคาน์เตอร์ เทรนเนอร์ดูหน้าสมาชิกได้แต่แก้ไม่ได้
+  membershipRenewals: ["admin", "manager", "staff"],
+  sales: ["admin", "manager", "staff"],
   // /classes เป็นหน้าหลังบ้าน
   classes: ["admin", "manager", "staff"],
   packages: ["admin", "manager", "staff"],
@@ -80,6 +83,49 @@ export function blockedCollections(
   return changedCollections(current, incoming).filter(
     (collection) => !canEditCollection(role, collection)
   );
+}
+
+/**
+ * ครั้ง PT ที่ยอมให้เทรนเนอร์อัปเดตได้ — เพิ่มขึ้นทีละครั้งตอนปิดคิวเท่านั้น
+ * ลดกลับไม่ได้ (กันการคืนครั้งให้ลูกค้าเอง) และเกิน quota ไม่ได้
+ */
+function acceptedSessionsUsed(current: Member, next: Member): number {
+  const used = current.sessionsUsed ?? 0;
+  const proposed = next.sessionsUsed ?? 0;
+  if (!hasSessionQuota(current.sessionsTotal)) return used;
+  if (!Number.isInteger(proposed) || proposed <= used) return used;
+  return Math.min(proposed, current.sessionsTotal as number);
+}
+
+/**
+ * เทรนเนอร์ดูข้อมูลสมาชิกได้อย่างเดียว แก้ไม่ได้
+ * ยกเว้นช่องเดียวคือ sessionsUsed ที่เพิ่มตอนกดปิดคิว PT — ถ้าบล็อกทั้งก้อน
+ * ครั้งเทรนจะไม่ถูกตัดโดยที่ไม่มีใครรู้
+ * ใช้ของในฐานข้อมูลเป็นฐานเสมอ จึงเพิ่ม/ลบสมาชิก และแก้ช่องอื่นไม่ได้
+ */
+export function restrictMembersToSessionUsage(
+  incoming: Member[],
+  existing: Member[]
+): { members: Member[]; blocked: boolean } {
+  const incomingById = new Map(incoming.map((m) => [m.id, m] as const));
+  let blocked = incoming.length !== existing.length;
+
+  const members = existing.map((current) => {
+    const next = incomingById.get(current.id);
+    if (!next) {
+      blocked = true;
+      return current;
+    }
+
+    const used = acceptedSessionsUsed(current, next);
+    const merged =
+      used === (current.sessionsUsed ?? 0) ? current : { ...current, sessionsUsed: used };
+    // เทียบกับที่รับจริง — ต่างเมื่อไหร่แปลว่ามีช่องอื่นถูกแก้มาแล้วโดนคืนค่าเดิม
+    if (canonical(next) !== canonical(merged)) blocked = true;
+    return merged;
+  });
+
+  return { members, blocked };
 }
 
 /** คิว PT เป็นของเทรนเนอร์คนนั้น ส่วนคลาสดูจากเทรนเนอร์ประจำคลาส */

@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-server";
+import { can } from "@/lib/permissions";
 import { renewMemberInDb } from "@/lib/db/renewals";
 
 export async function POST(request: Request) {
   const session = await getServerSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // ต่ออายุคือการบันทึกยอดขาย — เทรนเนอร์ดูหน้าสมาชิกได้แต่ทำรายการไม่ได้
+  if (!can(session.role, "members.edit")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {

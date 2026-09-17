@@ -111,6 +111,7 @@ export default function MembersPage() {
     loadPortalAccounts();
   }, [loadPortalAccounts]);
 
+  const canEdit = can(role, "members.edit");
   const canDelete = can(role, "members.delete");
   const canGrantAccess = can(role, "members.grantAccess");
 
@@ -255,6 +256,7 @@ export default function MembersPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) return;
     const pkg = data.packages.find((p) => p.id === form.packageId);
     if (!pkg) return;
 
@@ -341,7 +343,7 @@ export default function MembersPage() {
 
   const handleRenew = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!renewingId) return;
+    if (!canEdit || !renewingId) return;
     const pkg = data.packages.find((p) => p.id === renewPackageId);
     const member = data.members.find((m) => m.id === renewingId);
     if (!pkg || !member) return;
@@ -424,12 +426,14 @@ export default function MembersPage() {
         descriptionTh="เพิ่ม แก้ไข ค้นหา และต่ออายุสมาชิก LiftLab Fitness"
         descriptionEn="Add, edit, search, and renew memberships"
         action={
-          <button className="btn-primary" onClick={openCreate}>
-            <span className="material-symbols-outlined text-[18px]">
-              person_add
-            </span>
-            เพิ่มสมาชิก
-          </button>
+          canEdit ? (
+            <button className="btn-primary" onClick={openCreate}>
+              <span className="material-symbols-outlined text-[18px]">
+                person_add
+              </span>
+              เพิ่มสมาชิก
+            </button>
+          ) : undefined
         }
       />
 
@@ -592,16 +596,18 @@ export default function MembersPage() {
                               history
                             </span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => openRenew(member)}
-                            title="ต่ออายุ"
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">
-                              autorenew
-                            </span>
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => openRenew(member)}
+                              title="ต่ออายุ"
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                autorenew
+                              </span>
+                            </button>
+                          )}
                           {canGrantAccess && (
                             <button
                               type="button"
@@ -624,16 +630,18 @@ export default function MembersPage() {
                               </span>
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => openEdit(member)}
-                            title="แก้ไข"
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">
-                              edit
-                            </span>
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(member)}
+                              title="แก้ไข"
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                edit
+                              </span>
+                            </button>
+                          )}
                           {canDelete && (
                             <button
                               type="button"

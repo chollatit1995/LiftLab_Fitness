@@ -115,6 +115,7 @@ export function canAccessPath(role: string, pathname: string): boolean {
 }
 
 export type Permission =
+  | "members.edit"
   | "members.delete"
   | "members.grantAccess"
   | "classes.edit"
@@ -126,6 +127,8 @@ export type Permission =
   | "coffee.stamp";
 
 const PERMISSIONS: Record<Permission, AppUserRole[]> = {
+  // เทรนเนอร์เปิดหน้าสมาชิกได้เพื่อดูข้อมูลประกอบการเทรน แต่แก้ไขไม่ได้
+  "members.edit": ["admin", "manager", "staff"],
   "members.delete": ["admin", "manager"],
   "members.grantAccess": ["admin", "manager"],
   "classes.edit": ["admin", "manager"],
