@@ -5,6 +5,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { Modal } from "@/components/Modal";
 import { PasswordField } from "@/components/PasswordField";
+import { CoffeeStampCard } from "@/components/CoffeeStampCard";
+import {
+  CoffeeLoyalty,
+  CoffeeLoyaltyEvent,
+  STAMPS_PER_FREE,
+  displayStamps,
+  eventTypeLabel,
+} from "@/lib/coffee-loyalty";
 import { useData } from "@/lib/data-context";
 import { daysUntil, todayISO, toISODate } from "@/lib/dates";
 import {
@@ -81,6 +89,12 @@ export default function MembersPage() {
   const [renewError, setRenewError] = useState("");
   const [memberRenewals, setMemberRenewals] = useState<MembershipRenewal[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [coffeeModalOpen, setCoffeeModalOpen] = useState(false);
+  const [coffeeMemberId, setCoffeeMemberId] = useState<string | null>(null);
+  const [coffeeLoyalty, setCoffeeLoyalty] = useState<CoffeeLoyalty | null>(null);
+  const [coffeeEvents, setCoffeeEvents] = useState<CoffeeLoyaltyEvent[]>([]);
+  const [coffeeLoading, setCoffeeLoading] = useState(false);
+  const [coffeeError, setCoffeeError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [role, setRole] = useState("");
@@ -254,6 +268,29 @@ export default function MembersPage() {
     }
   };
 
+  const openCoffee = async (member: Member) => {
+    setCoffeeMemberId(member.id);
+    setCoffeeModalOpen(true);
+    setCoffeeLoading(true);
+    setCoffeeError("");
+    setCoffeeLoyalty(null);
+    setCoffeeEvents([]);
+    try {
+      const res = await fetch(`/api/coffee?memberId=${encodeURIComponent(member.id)}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setCoffeeError(json.error || "โหลดข้อมูลกาแฟไม่สำเร็จ");
+        return;
+      }
+      setCoffeeLoyalty(json.loyalty ?? null);
+      setCoffeeEvents(json.events ?? []);
+    } catch {
+      setCoffeeError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setCoffeeLoading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit) return;
@@ -417,6 +454,7 @@ export default function MembersPage() {
   const renewingMember = data.members.find((m) => m.id === renewingId);
   const renewPkg = data.packages.find((p) => p.id === renewPackageId);
   const historyMember = data.members.find((m) => m.id === historyMemberId);
+  const coffeeMember = data.members.find((m) => m.id === coffeeMemberId);
 
   return (
     <div>
@@ -586,6 +624,16 @@ export default function MembersPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openCoffee(member)}
+                            title="แต้มกาแฟ"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              coffee
+                            </span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => openHistory(member)}
@@ -1057,6 +1105,93 @@ export default function MembersPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={coffeeModalOpen}
+        onClose={() => setCoffeeModalOpen(false)}
+        title="แต้มกาแฟ"
+        subtitle={coffeeMember?.name ?? "Coffee Loyalty"}
+      >
+        {coffeeLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+          </div>
+        ) : coffeeError ? (
+          <p className="py-10 text-center text-sm text-red-600">{coffeeError}</p>
+        ) : !coffeeLoyalty ? (
+          <p className="py-10 text-center text-sm text-slate-500">
+            สมาชิกคนนี้ยังไม่เคยสะสมแต้มกาแฟ
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <CoffeeStampCard
+              stamps={coffeeLoyalty.stamps}
+              memberName={coffeeMember?.name}
+              compact
+            />
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-amber-900">
+                  {coffeeLoyalty.totalStamps}
+                </p>
+                <p className="text-xs font-medium text-amber-800/80">
+                  สะสมทั้งหมด (แก้ว)
+                </p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-emerald-900">
+                  {coffeeLoyalty.freeRedeemed}
+                </p>
+                <p className="text-xs font-medium text-emerald-800/80">
+                  แลกฟรีไปแล้ว (แก้ว)
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-slate-900">
+                  {displayStamps(coffeeLoyalty.stamps)}/{STAMPS_PER_FREE}
+                </p>
+                <p className="text-xs font-medium text-slate-600">
+                  รอบนี้ (แก้ว)
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                ประวัติล่าสุด
+              </h3>
+              {coffeeEvents.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">
+                  ยังไม่มีประวัติ
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {coffeeEvents.map((event) => (
+                    <li
+                      key={event.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">
+                          {eventTypeLabel(event.eventType)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {formatDate(event.createdAt)}
+                          {event.staffName && ` · โดย ${event.staffName}`}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-amber-800">
+                        เหลือ {displayStamps(event.stampsAfter)}/{STAMPS_PER_FREE}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         )}
       </Modal>
