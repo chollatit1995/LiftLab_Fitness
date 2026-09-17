@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CoffeeStampCard } from "@/components/CoffeeStampCard";
 import { Badge } from "@/components/Badge";
@@ -17,6 +18,7 @@ import {
   requestTypeLabel,
 } from "@/lib/coffee-loyalty";
 import { formatDate, statusColors } from "@/lib/store";
+import { can } from "@/lib/permissions";
 import { todayISO } from "@/lib/dates";
 
 const statusLabels: Record<string, string> = {
@@ -45,6 +47,7 @@ export default function CoffeeCounterPage() {
   const [reportTo, setReportTo] = useState(todayISO());
   const [report, setReport] = useState<CoffeeSalesReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [role, setRole] = useState("");
 
   const loadPending = useCallback(async () => {
     setLoadingPending(true);
@@ -136,6 +139,13 @@ export default function CoffeeCounterPage() {
   useEffect(() => {
     loadReport();
   }, [loadReport]);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setRole(d.user?.role ?? ""))
+      .catch(() => setRole(""));
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => searchMembers(query), 300);
@@ -249,6 +259,17 @@ export default function CoffeeCounterPage() {
         descriptionTh={`สมาชิกกดขอสะสมใน Portal → พนักงานกดยืนยันที่นี่ (ครบ ${STAMPS_PER_FREE} แก้ว ฟรี 1 แก้ว)`}
         descriptionEn="Confirm member stamp requests from the portal"
         icon="coffee"
+        action={
+          can(role, "coffee.history") ? (
+            <Link
+              href="/coffee/history"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">history</span>
+              ดูประวัติทั้งหมด
+            </Link>
+          ) : undefined
+        }
       />
 
       {message && (

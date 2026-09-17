@@ -1,10 +1,14 @@
 import {
+  COFFEE_HISTORY_LIMIT,
   CoffeeDailySale,
+  CoffeeHistoryEntry,
+  CoffeeHistoryResult,
   CoffeeLoyalty,
   CoffeeLoyaltyEvent,
   CoffeeMemberSummary,
   CoffeeRequestType,
   CoffeeSalesReport,
+  CoffeeStaffTally,
   CoffeeStampRequest,
   DEFAULT_COFFEE_CUP_PRICE,
   STAMPS_PER_FREE,
@@ -574,6 +578,80 @@ export async function redeemFreeCoffee(
       ok: true,
       loyalty,
       event: mapEvent(eventRows[0]),
+    };
+  });
+}
+
+/**
+ * ประวัติรวมของทุกคนในช่วงวันที่ — ใครกดสะสม/กดแลกฟรีให้ใคร เมื่อไหร่
+ * แยกจาก getLoyaltyEvents ที่ดูได้ทีละสมาชิกและตัดเวลาทิ้ง
+ */
+export async function getCoffeeHistory(
+  from: string,
+  to: string,
+  limit = COFFEE_HISTORY_LIMIT
+): Promise<CoffeeHistoryResult> {
+  const fromDate = toISODate(from) || todayISO();
+  const toDate = toISODate(to) || todayISO();
+
+  return withDb(async (sql) => {
+    // created_at เป็น timestamp — ขอบบนต้องเป็น "ก่อนวันถัดไป" ไม่งั้นรายการของวันสุดท้ายหาย
+    const rows = await sql`
+      SELECT e.id,
+             e.member_id,
+             e.event_type,
+             e.stamps_after,
+             e.staff_name,
+             e.created_at,
+             COALESCE(m.name, '') AS member_name
+      FROM coffee_loyalty_events e
+      LEFT JOIN members m ON m.id = e.member_id
+      WHERE e.created_at >= ${fromDate}::date
+        AND e.created_at < ${toDate}::date + INTERVAL '1 day'
+      ORDER BY e.created_at DESC
+      LIMIT ${limit}
+    `;
+
+    const summary = await sql`
+      SELECT COALESCE(NULLIF(staff_name, ''), '') AS staff_name,
+             COUNT(*) FILTER (WHERE event_type = 'stamp') AS stamps,
+             COUNT(*) FILTER (WHERE event_type = 'redeem') AS redeems
+      FROM coffee_loyalty_events
+      WHERE created_at >= ${fromDate}::date
+        AND created_at < ${toDate}::date + INTERVAL '1 day'
+      GROUP BY 1
+      ORDER BY COUNT(*) DESC
+    `;
+
+    const entries: CoffeeHistoryEntry[] = rows.map((row) => ({
+      id: row.id as string,
+      memberId: row.member_id as string,
+      memberName: (row.member_name as string) || "(ถูกลบแล้ว)",
+      eventType: row.event_type as CoffeeLoyaltyEvent["eventType"],
+      stampsAfter: Number(row.stamps_after ?? 0),
+      staffName: (row.staff_name as string | null) || null,
+      // postgres.js คืน created_at เป็น Date อยู่แล้ว — แปลงเป็น ISO ไม่ตัดเวลาทิ้ง
+      createdAt: new Date(row.created_at as string | Date).toISOString(),
+    }));
+
+    const byStaff: CoffeeStaffTally[] = summary.map((row) => ({
+      staffName: (row.staff_name as string) || "ไม่ระบุ",
+      stamps: Number(row.stamps ?? 0),
+      redeems: Number(row.redeems ?? 0),
+    }));
+
+    const totals = byStaff.reduce(
+      (acc, s) => ({ stamps: acc.stamps + s.stamps, redeems: acc.redeems + s.redeems }),
+      { stamps: 0, redeems: 0 }
+    );
+
+    return {
+      from: fromDate,
+      to: toDate,
+      total: totals.stamps + totals.redeems,
+      entries,
+      byStaff,
+      totals,
     };
   });
 }

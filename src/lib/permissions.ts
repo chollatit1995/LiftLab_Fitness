@@ -41,6 +41,13 @@ export const NAV_ITEMS: NavItem[] = [
     roles: [...BACK_OFFICE_ROLES, ...TRAINER_ROLES],
   },
   {
+    href: "/coffee/history",
+    icon: "history",
+    labelTh: "ประวัติกาแฟ",
+    labelEn: "Coffee History",
+    roles: ["admin", "manager"],
+  },
+  {
     href: "/classes",
     icon: "fitness_center",
     labelTh: "คลาส & แพ็กเกจ",
@@ -124,7 +131,8 @@ export type Permission =
   | "staff.manage"
   | "staff.grantAccess"
   | "users.manage"
-  | "coffee.stamp";
+  | "coffee.stamp"
+  | "coffee.history";
 
 const PERMISSIONS: Record<Permission, AppUserRole[]> = {
   // เทรนเนอร์เปิดหน้าสมาชิกได้เพื่อดูข้อมูลประกอบการเทรน แต่แก้ไขไม่ได้
@@ -139,6 +147,8 @@ const PERMISSIONS: Record<Permission, AppUserRole[]> = {
   "staff.grantAccess": ["admin", "manager"],
   "users.manage": ["admin"],
   "coffee.stamp": ["admin", "manager", "staff", "trainer"],
+  // ประวัติรวมเป็นเครื่องมือตรวจสอบ — คนที่ถูกตรวจไม่ควรเป็นคนเปิดดูเอง
+  "coffee.history": ["admin", "manager"],
 };
 
 export function can(role: string, permission: Permission): boolean {

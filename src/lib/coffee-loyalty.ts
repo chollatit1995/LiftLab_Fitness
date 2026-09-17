@@ -66,6 +66,37 @@ export interface CoffeeSalesReport {
   };
 }
 
+/** จำนวนรายการสูงสุดที่ดึงมาแสดงต่อครั้งในหน้าประวัติ */
+export const COFFEE_HISTORY_LIMIT = 200;
+
+/** หนึ่งบรรทัดในประวัติรวม — ใครกดอะไรให้สมาชิกคนไหน เมื่อไหร่ */
+export interface CoffeeHistoryEntry {
+  id: string;
+  memberId: string;
+  memberName: string;
+  eventType: CoffeeLoyaltyEvent["eventType"];
+  stampsAfter: number;
+  staffName: string | null;
+  /** timestamp เต็ม ไม่ตัดเวลาทิ้ง — ประวัติต้องบอกได้ว่ากดตอนกี่โมง */
+  createdAt: string;
+}
+
+export interface CoffeeStaffTally {
+  staffName: string;
+  stamps: number;
+  redeems: number;
+}
+
+export interface CoffeeHistoryResult {
+  from: string;
+  to: string;
+  /** จำนวนรายการทั้งหมดในช่วง — มากกว่า entries.length ได้ถ้าโดน limit ตัด */
+  total: number;
+  entries: CoffeeHistoryEntry[];
+  byStaff: CoffeeStaffTally[];
+  totals: { stamps: number; redeems: number };
+}
+
 export function stampsUntilFree(stamps: number): number {
   const mod = stamps % STAMPS_PER_FREE;
   return mod === 0 && stamps > 0 ? 0 : STAMPS_PER_FREE - mod;
