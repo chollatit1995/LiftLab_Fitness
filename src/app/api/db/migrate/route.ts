@@ -19,7 +19,8 @@ async function runMigration() {
 
   try {
     const result = await withDb(async (sql) => {
-      await ensureSchema(sql);
+      // หน้านี้คือจุดที่ตั้งใจรัน schema จริง จึงบังคับรันใหม่เสมอ ไม่ใช้ผลที่ cache ไว้
+      await ensureSchema(sql, { force: true });
       const empty = await isDatabaseEmpty(sql);
       if (empty) {
         await saveAppData(initialData, sql);

@@ -7,11 +7,19 @@ import {
   SESSION_MAX_AGE_REMEMBERED,
   sessionCookieOptions,
 } from "@/lib/auth";
-import { ensureSchema } from "@/lib/db";
+import { ensureSchema, isDbConfigured } from "@/lib/db";
 import { withDb } from "@/lib/db/client";
 import { authenticateMember } from "@/lib/db/member-users";
 
 export async function POST(request: Request) {
+  // เหมือนฝั่งพนักงาน — ไม่มีฐานข้อมูลก็ยืนยันตัวตนสมาชิกไม่ได้ ต้องบอกสาเหตุให้ตรง
+  if (!isDbConfigured()) {
+    return NextResponse.json(
+      { error: "ยังไม่ได้เชื่อมต่อฐานข้อมูล — ตั้งค่า POSTGRES_URL ก่อนใช้งาน" },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await request.json();
     const login = String(body.login ?? body.name ?? body.email ?? "").trim();

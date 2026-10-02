@@ -9,12 +9,23 @@ import {
   SESSION_MAX_AGE_REMEMBERED,
   sessionCookieOptions,
 } from "@/lib/auth";
-import { ensureSchema } from "@/lib/db";
+import { ensureSchema, isDbConfigured } from "@/lib/db";
 import { withDb } from "@/lib/db/client";
 import { authenticate, seedDefaultUsers } from "@/lib/db/users";
 import { authenticateMember } from "@/lib/db/member-users";
 
 export async function POST(request: Request) {
+  /**
+   * บัญชีผู้ใช้อยู่ในฐานข้อมูลทั้งหมด ถ้ายังไม่ได้ต่อก็ล็อกอินไม่ได้เลยสักคน
+   * เช็คก่อนเข้า try เพื่อไม่ให้ตกไปที่ catch แล้วขึ้น "เกิดข้อผิดพลาด" ซึ่งปิดบังสาเหตุจริง
+   */
+  if (!isDbConfigured()) {
+    return NextResponse.json(
+      { error: "ยังไม่ได้เชื่อมต่อฐานข้อมูล — ตั้งค่า POSTGRES_URL ก่อนใช้งาน" },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await request.json();
     const login = String(body.login ?? body.name ?? body.email ?? "").trim();

@@ -13,6 +13,28 @@ export function mergeRenewals<T extends { id: string }>(
   });
 }
 
+/**
+ * รวม sales โดยไม่ลบรายการที่ฝั่งเซิร์ฟเวอร์บันทึกเอง เช่น การต่ออายุผ่าน /api/members/renew
+ * หน้าแอดมินถือ sales ชุดที่โหลดตอนเปิดหน้าแล้วส่งกลับมาทั้งก้อน ถ้าไม่กันไว้
+ * saveAppData จะลบแถวที่เพิ่งถูกบันทึกหลังจากนั้นทิ้งไปเงียบ ๆ — ยอดขายหายทั้งรายการ
+ *
+ * ยังลบได้อยู่กรณีเดียวคือสมาชิกเจ้าของยอดถูกลบไปพร้อมกันในรอบนั้น
+ * (หน้าสมาชิกลบยอดขายแบบ cascade ตาม memberId ไม่มีที่ไหนลบยอดขายทีละรายการ)
+ */
+export function mergeSales<T extends { id: string; memberId: string }>(
+  serverItems: T[],
+  clientItems: T[],
+  keptMemberIds: Set<string>
+): T[] {
+  const byId = new Map(clientItems.map((item) => [item.id, item]));
+  for (const item of serverItems) {
+    if (byId.has(item.id)) continue;
+    if (!keptMemberIds.has(item.memberId)) continue;
+    byId.set(item.id, item);
+  }
+  return Array.from(byId.values());
+}
+
 /** สถานะที่ถือว่าจบแล้ว — เปลี่ยนกลับไม่ได้ */
 const TERMINAL_BOOKING_STATUSES = new Set(["cancelled", "completed"]);
 

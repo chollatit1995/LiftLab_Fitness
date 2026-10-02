@@ -3,7 +3,7 @@ import { initialData } from "../store";
 import { SCHEMA_CONSTRAINT_STATEMENTS, SCHEMA_STATEMENTS } from "./schema";
 import { toISODate } from "../dates";
 import { withDb } from "./client";
-import { mergeBookings, mergeRenewals } from "./merge";
+import { mergeBookings, mergeRenewals, mergeSales } from "./merge";
 import {
   CancelActor,
   facilityCapacityMap,
@@ -22,7 +22,7 @@ import { mapRenewalRow } from "./renewals";
 export { isDbConfigured, getDatabaseUrl } from "./client";
 export type { CancelActor } from "../bookings";
 
-export async function ensureSchema(sql: ReturnType<typeof import("postgres")>): Promise<void> {
+async function runSchema(sql: ReturnType<typeof import("postgres")>): Promise<void> {
   for (const statement of SCHEMA_STATEMENTS) {
     await sql.unsafe(statement);
   }
@@ -36,6 +36,35 @@ export async function ensureSchema(sql: ReturnType<typeof import("postgres")>): 
         String(error)
       );
     }
+  }
+}
+
+/** จำไว้ว่า process นี้รัน schema ไปแล้ว — ล้างทิ้งเมื่อพลาด เพื่อให้ครั้งหน้าลองใหม่ */
+let schemaReady: Promise<void> | null = null;
+
+/**
+ * สร้าง/อัปเดต schema ให้ครบ — รันครั้งเดียวต่อ process
+ *
+ * เดิมทุก API call ยิง DDL ~30 คำสั่งใหม่ทุกครั้ง หน้าเว็บมี poll แจ้งเตือนกาแฟทุก 12 วินาที
+ * แต่ละแท็บจึงยิงหลักร้อยคำสั่งต่อนาทีบนคอนเนกชันใหม่ทุกครั้ง และ ALTER TABLE ยังจับ lock
+ * ชนกับการบันทึกที่เกิดพร้อมกันได้ ผลลัพธ์ที่คาดไว้คือช้าและคอนเนกชันเต็มเมื่อคนใช้พร้อมกันหลายคน
+ *
+ * force = true สำหรับ /api/db/migrate ที่ต้องบังคับรันใหม่หลังแก้ schema โดยไม่ต้อง deploy ใหม่
+ */
+export async function ensureSchema(
+  sql: ReturnType<typeof import("postgres")>,
+  options: { force?: boolean } = {}
+): Promise<void> {
+  if (options.force || !schemaReady) {
+    schemaReady = runSchema(sql);
+  }
+
+  const pending = schemaReady;
+  try {
+    await pending;
+  } catch (error) {
+    if (schemaReady === pending) schemaReady = null;
+    throw error;
   }
 }
 
@@ -513,6 +542,12 @@ export async function persistAppData(
     const merged: AppData = {
       ...authorized,
       bookings: bookings.filter((b) => !rejectedIds.has(b.id)),
+      // ยอดขายที่เซิร์ฟเวอร์บันทึกเอง (ต่ออายุ) ต้องไม่หายไปกับ payload เก่าของหน้าที่เปิดค้างไว้
+      sales: mergeSales(
+        existing.sales,
+        authorized.sales ?? [],
+        new Set(authorized.members.map((m) => m.id))
+      ),
       membershipRenewals: mergeRenewals(
         existing.membershipRenewals,
         authorized.membershipRenewals ?? []
