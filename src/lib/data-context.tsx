@@ -30,16 +30,29 @@ interface DataContextValue {
   reloadData: () => Promise<AppData | null>;
   hydrated: boolean;
   usingDatabase: boolean;
+  /**
+   * ข้อมูลที่ถืออยู่มาจากฐานข้อมูลจริงในรอบนี้หรือยัง
+   * เท็จ = กำลังดูสแนปช็อตเก่าใน localStorage จึงบันทึกกลับไม่ได้
+   */
+  canSave: boolean;
   rejectedBookings: RejectedBooking[];
   dismissRejectedBookings: () => void;
   /** ข้อความเตือนเมื่อการแก้ไขถูกปฏิเสธเพราะสิทธิ์ไม่พอ */
   permissionNotice: string;
   dismissPermissionNotice: () => void;
+  /** ข้อความเตือนเมื่อแก้ไขแล้วบันทึกไม่ได้เพราะยังไม่ได้เชื่อมฐานข้อมูล */
+  saveBlockedNotice: string;
+  dismissSaveBlockedNotice: () => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-const FETCH_TIMEOUT_MS = 8000;
+/**
+ * ต้องมากกว่า connect_timeout ของฝั่งฐานข้อมูล (10 วินาที ใน db/client.ts) เสมอ
+ * ของเดิมตั้งไว้ 8 วินาที client จึงยอมแพ้ตั้งแต่ server ยังต่อฐานข้อมูลไม่เสร็จด้วยซ้ำ
+ * แล้วตกไปใช้ข้อมูลเก่าใน localStorage ทั้งที่ฐานข้อมูลยังดีอยู่
+ */
+const FETCH_TIMEOUT_MS = 15000;
 
 /**
  * /api/data ต้องมี session พนักงาน — ห้ามเรียกตอนอยู่หน้า login หรือ portal ของสมาชิก
@@ -139,9 +152,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [usingDatabase, setUsingDatabase] = useState(false);
   const [rejectedBookings, setRejectedBookings] = useState<RejectedBooking[]>([]);
   const [permissionNotice, setPermissionNotice] = useState("");
+  const [saveBlockedNotice, setSaveBlockedNotice] = useState("");
+  const [canSave, setCanSave] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** มีการแก้ไขที่ยังบันทึกลงฐานข้อมูลไม่สำเร็จหรือยัง */
   const unsavedRef = useRef(false);
+  /**
+   * เคยโหลดจากฐานข้อมูลสำเร็จในรอบนี้แล้วหรือยัง — ต่างจาก usingDatabase ตรงที่
+   * ไม่กลับเป็นเท็จเมื่อบันทึกพลาด ข้อมูลยังมีต้นทางจากฐานข้อมูลอยู่ จึงลองบันทึกซ้ำได้
+   */
+  const loadedFromDbRef = useRef(false);
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
@@ -150,6 +170,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!apiData) return false;
     setData(apiData);
     setUsingDatabase(true);
+    loadedFromDbRef.current = true;
+    setCanSave(true);
+    setSaveBlockedNotice("");
     return true;
   }, []);
 
@@ -190,13 +213,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [pathname, hydrated, usingDatabase, loadFromApi]);
 
   const persist = useCallback((next: AppData) => {
+    const staffPath = shouldFetchStaffDataApi(pathnameRef.current);
+
+    /**
+     * ห้ามส่งก้อนที่ไม่ได้มาจากฐานข้อมูลกลับขึ้นไปเด็ดขาด
+     *
+     * ถ้า GET /api/data พลาด หน้าเว็บจะ fallback ไปใช้สแนปช็อตเก่าใน localStorage
+     * ซึ่งอาจเก่าเป็นวัน พอ PUT กลับ saveAppData จะลบทุกแถวที่เกิดขึ้นหลังสแนปช็อตนั้นทิ้ง
+     * — สมาชิกที่ถูกเพิ่มระหว่างนั้นหายทั้งหมด ยืนยันแล้วว่าเคยเกิดจริง 6 ราย
+     *
+     * merge ช่วยไม่ได้เพราะการแก้ของผู้ใช้อ้างอิงกับก้อนเก่าทั้งก้อน
+     * ยอมไม่บันทึกแล้วบอกให้โหลดใหม่ ดีกว่าลบข้อมูลของคนอื่น
+     *
+     * ไม่เขียนลง localStorage ด้วย — ถ้าเขียน รอบหน้าที่เปิดมาแล้ว API ล่มอีก
+     * จะหยิบก้อนที่มีการแก้ค้างอยู่นี้มาแสดงราวกับว่าบันทึกสำเร็จไปแล้ว
+     * และไม่แตะ unsavedRef เพื่อให้ effect ด้านบนยังลองโหลดใหม่เองได้เมื่อเปลี่ยนหน้า
+     */
+    if (staffPath && !loadedFromDbRef.current) {
+      setSaveBlockedNotice(
+        "ยังโหลดข้อมูลจากฐานข้อมูลไม่สำเร็จ การแก้ไขนี้จึงยังไม่ถูกบันทึก — กดโหลดใหม่ แล้วทำรายการอีกครั้ง"
+      );
+      return;
+    }
+
     saveData(next);
     // หน้า portal/login ไม่ควรเขียนทับฐานข้อมูลผ่าน /api/data ของพนักงาน
-    if (!shouldFetchStaffDataApi(pathnameRef.current)) {
+    if (!staffPath) {
       unsavedRef.current = false;
       setUsingDatabase(false);
       return;
     }
+
     unsavedRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
@@ -223,6 +270,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const dismissRejectedBookings = useCallback(() => setRejectedBookings([]), []);
   const dismissPermissionNotice = useCallback(() => setPermissionNotice(""), []);
+  const dismissSaveBlockedNotice = useCallback(() => setSaveBlockedNotice(""), []);
 
   const updateData = useCallback(
     (updater: (prev: AppData) => AppData) => {
@@ -243,6 +291,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     saveData(apiData);
     setUsingDatabase(true);
     unsavedRef.current = false;
+    loadedFromDbRef.current = true;
+    setCanSave(true);
+    setSaveBlockedNotice("");
     return apiData;
   }, []);
 
@@ -260,10 +311,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         reloadData,
         hydrated,
         usingDatabase,
+        canSave,
         rejectedBookings,
         dismissRejectedBookings,
         permissionNotice,
         dismissPermissionNotice,
+        saveBlockedNotice,
+        dismissSaveBlockedNotice,
       }}
     >
       {children}

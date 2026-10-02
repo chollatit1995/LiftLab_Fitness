@@ -55,6 +55,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     usingDatabase,
     permissionNotice,
     dismissPermissionNotice,
+    canSave,
+    saveBlockedNotice,
+    dismissSaveBlockedNotice,
   } = useData();
   const [user, setUser] = useState<User | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
@@ -420,8 +423,21 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 text-sm text-red-800">
               <MaterialIcon name="cloud_off" className="text-[18px]" />
               <span>
-                <strong className="font-semibold">ยังไม่ได้เชื่อมกับฐานข้อมูล</strong>{" "}
-                — ข้อมูลอาจไม่ sync กับ Supabase
+                {canSave ? (
+                  <>
+                    <strong className="font-semibold">
+                      บันทึกล่าสุดไม่สำเร็จ
+                    </strong>{" "}
+                    — ข้อมูลอาจไม่ sync กับ Supabase
+                  </>
+                ) : (
+                  <>
+                    <strong className="font-semibold">
+                      ยังไม่ได้เชื่อมกับฐานข้อมูล
+                    </strong>{" "}
+                    — กำลังแสดงข้อมูลเก่าในเครื่อง แก้ไขตอนนี้จะไม่ถูกบันทึก
+                  </>
+                )}
               </span>
               <button
                 onClick={() => window.location.reload()}
@@ -449,6 +465,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
 
         <main className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+          {saveBlockedNotice && (
+            <div className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              <MaterialIcon name="cloud_off" className="text-[20px]" />
+              <p className="min-w-0 flex-1">{saveBlockedNotice}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-800 hover:bg-red-100"
+              >
+                โหลดใหม่
+              </button>
+              <button
+                type="button"
+                onClick={dismissSaveBlockedNotice}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-red-100"
+              >
+                ปิด
+              </button>
+            </div>
+          )}
           {permissionNotice && (
             <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <span className="material-symbols-outlined text-[20px]">lock</span>
