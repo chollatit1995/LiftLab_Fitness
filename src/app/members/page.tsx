@@ -19,6 +19,7 @@ import {
   EXPIRING_SOON_DAYS,
   formatCurrency,
   formatDate,
+  formatDateTime,
   generateId,
   isExpiringSoon,
   statusColors,
@@ -32,12 +33,16 @@ import {
   englishNameOrError,
   filterEnglishNameInput,
 } from "@/lib/name";
-import { sessionsFromPackage, hasSessionQuota } from "@/lib/sessions";
+import {
+  sessionsFromPackage,
+  hasSessionQuota,
+  sessionsRemaining,
+} from "@/lib/sessions";
 import {
   bestOfferFor,
   livePromotions,
 } from "@/lib/promotions";
-import { Member, MembershipRenewal, Sale } from "@/lib/types";
+import { Booking, Member, MembershipRenewal, Sale } from "@/lib/types";
 
 type MemberStatus = Member["status"];
 type StatusFilter = "all" | MemberStatus | "expiringSoon";
@@ -75,6 +80,12 @@ const statusLabels: Record<MemberStatus, string> = {
   expired: "หมดอายุ",
 };
 
+const bookingStatusLabels: Record<Booking["status"], string> = {
+  confirmed: "ยืนยันแล้ว",
+  completed: "เทรนแล้ว",
+  cancelled: "ยกเลิก",
+};
+
 export default function MembersPage() {
   const { data, updateData, reloadData, hydrated } = useData();
   const [modalOpen, setModalOpen] = useState(false);
@@ -95,6 +106,9 @@ export default function MembersPage() {
   const [coffeeEvents, setCoffeeEvents] = useState<CoffeeLoyaltyEvent[]>([]);
   const [coffeeLoading, setCoffeeLoading] = useState(false);
   const [coffeeError, setCoffeeError] = useState("");
+  const [trainingModalOpen, setTrainingModalOpen] = useState(false);
+  const [trainingMemberId, setTrainingMemberId] = useState<string | null>(null);
+  const [trainingLoading, setTrainingLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [role, setRole] = useState("");
@@ -211,6 +225,24 @@ export default function MembersPage() {
       );
   }, [data.members, data.packages, search, statusFilter]);
 
+  /** คิว PT ของสมาชิกคนเดียว เรียงใหม่ไปเก่า — หน้าจองรวมของทุกคนไว้ด้วยกัน */
+  const trainingSessions = useMemo(() => {
+    if (!trainingMemberId) return [];
+    return data.bookings
+      .filter((b) => b.type === "trainer" && b.memberId === trainingMemberId)
+      .sort((a, b) =>
+        `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)
+      );
+  }, [data.bookings, trainingMemberId]);
+
+  const trainingCounts = useMemo(
+    () => ({
+      completed: trainingSessions.filter((b) => b.status === "completed").length,
+      upcoming: trainingSessions.filter((b) => b.status === "confirmed").length,
+    }),
+    [trainingSessions]
+  );
+
   const openCreate = () => {
     setEditingId(null);
     const joinedAt = todayISO();
@@ -288,6 +320,21 @@ export default function MembersPage() {
       setCoffeeError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setCoffeeLoading(false);
+    }
+  };
+
+  /**
+   * ดึงข้อมูลใหม่ก่อนเปิดเสมอ — หน้านี้ถือ bookings ชุดที่โหลดตอนเปิดหน้า
+   * เทรนเนอร์อาจเพิ่งปิดคิวไปหลังจากนั้น ประวัติที่ค้างอยู่จะขาดครั้งล่าสุด
+   */
+  const openTraining = async (member: Member) => {
+    setTrainingMemberId(member.id);
+    setTrainingModalOpen(true);
+    setTrainingLoading(true);
+    try {
+      await reloadData();
+    } finally {
+      setTrainingLoading(false);
     }
   };
 
@@ -455,6 +502,9 @@ export default function MembersPage() {
   const renewPkg = data.packages.find((p) => p.id === renewPackageId);
   const historyMember = data.members.find((m) => m.id === historyMemberId);
   const coffeeMember = data.members.find((m) => m.id === coffeeMemberId);
+  const trainingMember = data.members.find((m) => m.id === trainingMemberId);
+  const trainingQuota = hasSessionQuota(trainingMember?.sessionsTotal);
+  const trainingUsed = trainingMember?.sessionsUsed ?? 0;
 
   return (
     <div>
@@ -624,6 +674,16 @@ export default function MembersPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openTraining(member)}
+                            title="ประวัติการเทรน"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-700"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              exercise
+                            </span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => openCoffee(member)}
@@ -1187,6 +1247,114 @@ export default function MembersPage() {
                       <span className="shrink-0 text-xs font-semibold text-amber-800">
                         เหลือ {displayStamps(event.stampsAfter)}/{STAMPS_PER_FREE}
                       </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={trainingModalOpen}
+        onClose={() => setTrainingModalOpen(false)}
+        title="ประวัติการเทรน"
+        subtitle={trainingMember?.name ?? "Training History"}
+        wide
+      >
+        {trainingLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-emerald-900">
+                  {trainingCounts.completed}
+                </p>
+                <p className="text-xs font-medium text-emerald-800/80">
+                  เทรนไปแล้ว (ครั้ง)
+                </p>
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-blue-900">
+                  {trainingCounts.upcoming}
+                </p>
+                <p className="text-xs font-medium text-blue-800/80">
+                  คิวที่ยังไม่ถึง
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-slate-900">
+                  {trainingQuota
+                    ? sessionsRemaining(
+                        trainingMember?.sessionsTotal,
+                        trainingUsed
+                      )
+                    : "—"}
+                </p>
+                <p className="text-xs font-medium text-slate-600">
+                  {trainingQuota
+                    ? `เหลือจากโควตา ${trainingMember?.sessionsTotal} ครั้ง`
+                    : "แพ็กเกจไม่จำกัดครั้ง"}
+                </p>
+              </div>
+            </div>
+
+            {/*
+              โควตานับเฉพาะรอบแพ็กเกจปัจจุบัน (ต่ออายุแล้วรีเซ็ตเป็น 0)
+              ส่วนรายการด้านล่างคือทุกครั้งที่เคยเทรน — สองตัวเลขนี้ต่างกันได้ตามปกติ
+            */}
+            {trainingQuota && trainingUsed !== trainingCounts.completed && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                โควตารอบปัจจุบันใช้ไป {trainingUsed}/
+                {trainingMember?.sessionsTotal} ครั้ง (รีเซ็ตทุกครั้งที่ต่ออายุ)
+                ส่วนรายการด้านล่างคือประวัติทั้งหมดที่เคยเทรน
+              </p>
+            )}
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                รายการทั้งหมด ({trainingSessions.length})
+              </h3>
+              {trainingSessions.length === 0 ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  สมาชิกคนนี้ยังไม่มีประวัติการจองเทรนเนอร์
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {trainingSessions.map((booking) => (
+                    <li
+                      key={booking.id}
+                      className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">
+                          {formatDate(booking.date)} · {booking.time} น.
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {booking.resourceName}
+                        </p>
+                        {booking.notes && (
+                          <p className="mt-1 text-xs text-slate-400">
+                            {booking.notes}
+                          </p>
+                        )}
+                        {booking.status === "cancelled" &&
+                          booking.cancelledBy && (
+                            <p className="mt-1 text-xs text-slate-400">
+                              ยกเลิกโดย {booking.cancelledBy}
+                              {booking.cancelledAt &&
+                                ` · ${formatDateTime(booking.cancelledAt)}`}
+                            </p>
+                          )}
+                      </div>
+                      <Badge
+                        label={bookingStatusLabels[booking.status]}
+                        className={`shrink-0 ${statusColors[booking.status]}`}
+                      />
                     </li>
                   ))}
                 </ul>
