@@ -164,8 +164,14 @@ export default function BookingsPage() {
   }, [visibleBookings, data.members, tab, statusFilter, query]);
 
   const grouped = useMemo(() => {
+    // คิวที่ยืนยันแล้วเรียงวันใกล้สุดก่อน ส่วนมุมมองอื่น (ประวัติ) เอาวันล่าสุดขึ้นก่อน
+    const newestFirst = statusFilter !== "confirmed";
     const sorted = [...filtered].sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      if (a.date !== b.date) {
+        return newestFirst
+          ? b.date.localeCompare(a.date)
+          : a.date.localeCompare(b.date);
+      }
       return a.time.localeCompare(b.time);
     });
     const map = new Map<string, Booking[]>();
@@ -175,7 +181,7 @@ export default function BookingsPage() {
       map.set(booking.date, list);
     }
     return [...map.entries()];
-  }, [filtered]);
+  }, [filtered, statusFilter]);
 
   /** เทรนเนอร์สร้างได้เฉพาะคิวของตัวเอง ไม่งั้นจะได้การจองที่ตัวเองมองไม่เห็น */
   const activeClasses = data.classes.filter(
