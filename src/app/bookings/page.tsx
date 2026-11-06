@@ -108,7 +108,10 @@ export default function BookingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [role, setRole] = useState("");
   const [staffId, setStaffId] = useState<string | null>(null);
-  const [completeTarget, setCompleteTarget] = useState<Booking | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    booking: Booking;
+    kind: "complete" | "cancel";
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -613,14 +616,14 @@ export default function BookingsPage() {
                           <>
                             <button
                               type="button"
-                              onClick={() => setCompleteTarget(booking)}
+                              onClick={() => setPendingAction({ booking, kind: "complete" })}
                               className="btn-secondary px-3 py-1.5 text-xs"
                             >
                               เสร็จสิ้น
                             </button>
                             <button
                               type="button"
-                              onClick={() => cancelBooking(booking.id)}
+                              onClick={() => setPendingAction({ booking, kind: "cancel" })}
                               className="btn-danger px-3 py-1.5 text-xs"
                             >
                               ยกเลิก
@@ -1047,66 +1050,86 @@ export default function BookingsPage() {
         )}
       </Modal>
 
-      {/* Complete confirmation modal */}
+      {/* Complete / cancel confirmation modal */}
       <Modal
-        open={!!completeTarget}
-        onClose={() => setCompleteTarget(null)}
-        title="ยืนยันการเสร็จสิ้น"
-        subtitle="ตรวจสอบรายละเอียดก่อนบันทึกว่าเสร็จสิ้น"
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+        title={
+          pendingAction?.kind === "cancel" ? "ยืนยันการยกเลิก" : "ยืนยันการเสร็จสิ้น"
+        }
+        subtitle={
+          pendingAction?.kind === "cancel"
+            ? "ตรวจสอบรายละเอียดก่อนยกเลิกการจองนี้"
+            : "ตรวจสอบรายละเอียดก่อนบันทึกว่าเสร็จสิ้น"
+        }
       >
-        {completeTarget && (
+        {pendingAction && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-slate-50 p-5">
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-500">ประเภท</span>
                   <span className="font-medium text-right">
-                    {bookingTypeLabels[completeTarget.type].th}
+                    {bookingTypeLabels[pendingAction.booking.type].th}
                   </span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-500">รายการ</span>
                   <span className="font-medium text-right">
-                    {completeTarget.resourceName}
+                    {pendingAction.booking.resourceName}
                   </span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-500">วันที่ / เวลา</span>
                   <span className="font-medium text-right">
-                    {formatDate(completeTarget.date)} · {completeTarget.time}
+                    {formatDate(pendingAction.booking.date)} · {pendingAction.booking.time}
                   </span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-500">สมาชิก</span>
                   <span className="font-medium text-right">
-                    {data.members.find((m) => m.id === completeTarget.memberId)?.name ??
-                      "—"}
+                    {data.members.find((m) => m.id === pendingAction.booking.memberId)
+                      ?.name ?? "—"}
                   </span>
                 </div>
               </div>
             </div>
-            {completeTarget.type === "trainer" && (
-              <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                ระบบจะหักเซสชัน PT ของสมาชิก 1 ครั้ง (ถ้ามีโควต้า)
+            {pendingAction.kind === "complete" &&
+              pendingAction.booking.type === "trainer" && (
+                <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  ระบบจะหักเซสชัน PT ของสมาชิก 1 ครั้ง (ถ้ามีโควต้า)
+                </p>
+              )}
+            {pendingAction.kind === "cancel" && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                ยกเลิกแล้วจะเปลี่ยนกลับไม่ได้
               </p>
             )}
             <div className="flex gap-3">
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => setCompleteTarget(null)}
+                onClick={() => setPendingAction(null)}
               >
-                ยกเลิก
+                ปิด
               </button>
               <button
                 type="button"
-                className="btn-primary flex-1"
+                className={
+                  pendingAction.kind === "cancel"
+                    ? "inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                    : "btn-primary flex-1"
+                }
                 onClick={() => {
-                  completeBooking(completeTarget.id);
-                  setCompleteTarget(null);
+                  if (pendingAction.kind === "cancel") {
+                    cancelBooking(pendingAction.booking.id);
+                  } else {
+                    completeBooking(pendingAction.booking.id);
+                  }
+                  setPendingAction(null);
                 }}
               >
-                ยืนยันเสร็จสิ้น
+                {pendingAction.kind === "cancel" ? "ยืนยันยกเลิก" : "ยืนยันเสร็จสิ้น"}
               </button>
             </div>
           </div>
