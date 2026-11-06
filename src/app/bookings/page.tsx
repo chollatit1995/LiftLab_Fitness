@@ -96,6 +96,7 @@ export default function BookingsPage() {
   const [tab, setTab] = useState<BookingType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("confirmed");
   const [query, setQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>("type");
   const [bookingType, setBookingType] = useState<BookingType>("class");
@@ -155,6 +156,7 @@ export default function BookingsPage() {
     return visibleBookings.filter((b) => {
       if (tab !== "all" && b.type !== tab) return false;
       if (statusFilter !== "all" && b.status !== statusFilter) return false;
+      if (dateFilter && b.date !== dateFilter) return false;
       if (!q) return true;
       const member = data.members.find((m) => m.id === b.memberId);
       return (
@@ -164,7 +166,7 @@ export default function BookingsPage() {
         b.date.includes(q)
       );
     });
-  }, [visibleBookings, data.members, tab, statusFilter, query]);
+  }, [visibleBookings, data.members, tab, statusFilter, dateFilter, query]);
 
   const grouped = useMemo(() => {
     // คิวที่ยืนยันแล้วเรียงวันใกล้สุดก่อน ส่วนมุมมองอื่น (ประวัติ) เอาวันล่าสุดขึ้นก่อน
@@ -494,16 +496,59 @@ export default function BookingsPage() {
 
       {/* Filters */}
       <div className="mb-5 space-y-3">
-        <div className="relative">
-          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
-            search
-          </span>
-          <input
-            className="input-field pl-10"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="ค้นหาชื่อสมาชิก คลาส เทรนเนอร์ หรือเวลา"
-          />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
+              search
+            </span>
+            <input
+              className="input-field pl-10"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ค้นหาชื่อสมาชิก คลาส เทรนเนอร์ หรือเวลา"
+            />
+          </div>
+
+          {/* ค้นหาตามวันที่ — เลือกจากปฏิทิน */}
+          <div className="flex gap-2">
+            <div className="relative flex-1 sm:w-56 sm:flex-none">
+              <span
+                className={`material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] ${
+                  dateFilter ? "text-brand-600" : "text-slate-400"
+                }`}
+              >
+                event
+              </span>
+              <input
+                type="date"
+                aria-label="ค้นหาตามวันที่"
+                className={`input-field pl-10 ${
+                  dateFilter ? "border-brand-400 bg-brand-50/50 font-medium text-brand-800" : ""
+                }`}
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+            </div>
+            {dateFilter ? (
+              <button
+                type="button"
+                onClick={() => setDateFilter("")}
+                title="ล้างวันที่"
+                className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+                ล้าง
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDateFilter(today)}
+                className="inline-flex shrink-0 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
+              >
+                วันนี้
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -644,7 +689,7 @@ export default function BookingsPage() {
             event_busy
           </span>
           <p className="mt-3 text-sm font-medium text-slate-600">
-            {query || tab !== "all" || statusFilter !== "all"
+            {query || dateFilter || tab !== "all" || statusFilter !== "all"
               ? "ไม่พบการจองตามเงื่อนไข"
               : "ยังไม่มีการจอง"}
           </p>
