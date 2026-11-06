@@ -108,6 +108,7 @@ export default function BookingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [role, setRole] = useState("");
   const [staffId, setStaffId] = useState<string | null>(null);
+  const [completeTarget, setCompleteTarget] = useState<Booking | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -606,7 +607,7 @@ export default function BookingsPage() {
                           <>
                             <button
                               type="button"
-                              onClick={() => completeBooking(booking.id)}
+                              onClick={() => setCompleteTarget(booking)}
                               className="btn-secondary px-3 py-1.5 text-xs"
                             >
                               เสร็จสิ้น
@@ -1034,6 +1035,72 @@ export default function BookingsPage() {
                 onClick={handleConfirm}
               >
                 {submitting ? "กำลังตรวจสอบ..." : "ยืนยันการจอง"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Complete confirmation modal */}
+      <Modal
+        open={!!completeTarget}
+        onClose={() => setCompleteTarget(null)}
+        title="ยืนยันการเสร็จสิ้น"
+        subtitle="ตรวจสอบรายละเอียดก่อนบันทึกว่าเสร็จสิ้น"
+      >
+        {completeTarget && (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-slate-50 p-5">
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">ประเภท</span>
+                  <span className="font-medium text-right">
+                    {bookingTypeLabels[completeTarget.type].th}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">รายการ</span>
+                  <span className="font-medium text-right">
+                    {completeTarget.resourceName}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">วันที่ / เวลา</span>
+                  <span className="font-medium text-right">
+                    {formatDate(completeTarget.date)} · {completeTarget.time}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">สมาชิก</span>
+                  <span className="font-medium text-right">
+                    {data.members.find((m) => m.id === completeTarget.memberId)?.name ??
+                      "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {completeTarget.type === "trainer" && (
+              <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                ระบบจะหักเซสชัน PT ของสมาชิก 1 ครั้ง (ถ้ามีโควต้า)
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setCompleteTarget(null)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                onClick={() => {
+                  completeBooking(completeTarget.id);
+                  setCompleteTarget(null);
+                }}
+              >
+                ยืนยันเสร็จสิ้น
               </button>
             </div>
           </div>
