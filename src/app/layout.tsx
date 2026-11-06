@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "./dark.css";
+import { themeInitScript } from "@/lib/theme";
 import { DataProvider } from "@/lib/data-context";
 import { AppShell } from "@/components/AppShell";
 
@@ -28,7 +30,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th">
+    <html lang="th" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <DataProvider>
           <AppShell>{children}</AppShell>

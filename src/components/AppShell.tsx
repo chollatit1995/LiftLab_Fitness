@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { isValidRole, navItemsForRole, roleLabels, defaultPathForRole, can } from "@/lib/permissions";
 import { useData } from "@/lib/data-context";
 
@@ -378,6 +379,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   เชื่อมต่อ DB แล้ว
                 </span>
               )}
+              <ThemeToggle />
               {user && (
                 <Link
                   href="/profile"
@@ -408,6 +410,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {pageTitle(pathname)}
             </p>
           </div>
+          <ThemeToggle compact />
           {user && (
             <Link
               href="/profile"
