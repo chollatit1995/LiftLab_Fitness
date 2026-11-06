@@ -48,7 +48,9 @@ export default function DashboardPage() {
     const memberIds = new Set(data.members.map((m) => m.id));
     const linkedSales = data.sales.filter((s) => memberIds.has(s.memberId));
 
-    const activeMembers = data.members.filter((m) => m.status === "active").length;
+    const activeMembers = data.members.filter(
+      (m) => effectiveMemberStatus(m) === "active"
+    ).length;
     const activeClasses = data.classes.filter((c) => c.status === "active").length;
     const totalSales = linkedSales.reduce((sum, s) => sum + s.amount, 0);
     const today = todayISO();

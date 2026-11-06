@@ -19,7 +19,9 @@ html.dark {
 .dark .admin-surface {
   background-image: linear-gradient(to bottom right, #020617, #0b1120, rgb(6 78 59 / 0.25));
 }
-.dark .card {
+/* card-hover ใช้ @apply card จึงได้พื้นขาวของตัวเอง — ต้อง remap คู่กัน */
+.dark .card,
+.dark .card-hover {
   border-color: #1e293b;
   background-color: #0f172a;
   --tw-shadow-color: rgb(0 0 0 / 0.3);
@@ -263,6 +265,11 @@ html.dark {
   --tw-gradient-to: rgb(19 28 46 / 0) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
 }
+.dark .from-slate-100 {
+  --tw-gradient-from: #1e293b var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(30 41 59 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
 .dark .via-white {
   --tw-gradient-to: rgb(15 23 42 / 0) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), #0f172a var(--tw-gradient-via-position), var(--tw-gradient-to);
@@ -281,3 +288,9 @@ html.dark {
 .dark .rounded-full.blur-3xl {
   display: none;
 }
+
+/* วงรอบไอคอนใน StatCard — ring-*-100 บนพื้นมืดเป็นขอบขาวชัดเกินไป */
+.dark .ring-emerald-100 { --tw-ring-color: rgb(16 185 129 / 0.2); }
+.dark .ring-sky-100 { --tw-ring-color: rgb(14 165 233 / 0.2); }
+.dark .ring-violet-100 { --tw-ring-color: rgb(139 92 246 / 0.2); }
+.dark .ring-orange-100 { --tw-ring-color: rgb(249 115 22 / 0.2); }
