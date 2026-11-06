@@ -406,6 +406,20 @@ export function saveData(data: AppData): void {
 /** สมาชิกที่เหลืออายุไม่เกินกี่วันถือว่า "ใกล้หมดอายุ" */
 export const EXPIRING_SOON_DAYS = 7;
 
+/**
+ * สถานะที่ใช้แสดงผลจริง — สถานะในฐานข้อมูลไม่ได้เปลี่ยนเป็น expired เองเมื่อเลยวันหมดอายุ
+ * จึงถือว่าสมาชิก active ที่เลยวันหมดอายุแล้ว (ไม่นับวันนี้) เป็น "หมดอายุ"
+ */
+export function effectiveMemberStatus(
+  member: Member,
+  today = todayISO()
+): Member["status"] {
+  if (member.status === "active" && daysUntil(member.expiresAt, today) < 0) {
+    return "expired";
+  }
+  return member.status;
+}
+
 /** สมาชิกที่ยังใช้งานอยู่ และเหลืออายุ 0–EXPIRING_SOON_DAYS วัน */
 export function isExpiringSoon(member: Member, today = todayISO()): boolean {
   if (member.status !== "active") return false;

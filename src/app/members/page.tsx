@@ -21,6 +21,7 @@ import {
   formatDate,
   formatDateTime,
   generateId,
+  effectiveMemberStatus,
   isExpiringSoon,
   statusColors,
 } from "@/lib/store";
@@ -191,10 +192,12 @@ export default function MembersPage() {
     const today = todayISO();
     return {
       all: data.members.length,
-      active: data.members.filter((m) => m.status === "active").length,
+      active: data.members.filter((m) => effectiveMemberStatus(m, today) === "active")
+        .length,
       pending: data.members.filter((m) => m.status === "pending").length,
       expiringSoon: data.members.filter((m) => isExpiringSoon(m, today)).length,
-      expired: data.members.filter((m) => m.status === "expired").length,
+      expired: data.members.filter((m) => effectiveMemberStatus(m, today) === "expired")
+        .length,
     };
   }, [data.members]);
 
@@ -205,7 +208,7 @@ export default function MembersPage() {
       .filter((m) => {
         if (statusFilter === "all") return true;
         if (statusFilter === "expiringSoon") return isExpiringSoon(m, today);
-        return m.status === statusFilter;
+        return effectiveMemberStatus(m, today) === statusFilter;
       })
       .filter((m) => {
         if (!q) return true;
@@ -221,7 +224,9 @@ export default function MembersPage() {
       .sort((a, b) =>
         statusFilter === "expiringSoon"
           ? a.expiresAt.localeCompare(b.expiresAt)
-          : b.joinedAt.localeCompare(a.joinedAt)
+          : statusFilter === "expired"
+            ? b.expiresAt.localeCompare(a.expiresAt)
+            : b.joinedAt.localeCompare(a.joinedAt)
       );
   }, [data.members, data.packages, search, statusFilter]);
 
@@ -668,8 +673,8 @@ export default function MembersPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <Badge
-                          label={statusLabels[member.status]}
-                          className={statusColors[member.status]}
+                          label={statusLabels[effectiveMemberStatus(member)]}
+                          className={statusColors[effectiveMemberStatus(member)]}
                         />
                       </td>
                       <td className="px-5 py-3.5">

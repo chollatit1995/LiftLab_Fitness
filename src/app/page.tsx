@@ -10,6 +10,7 @@ import {
   EXPIRING_SOON_DAYS,
   formatCurrency,
   formatDate,
+  effectiveMemberStatus,
   isExpiringSoon,
   statusColors,
   bookingTypeLabels,
@@ -76,7 +77,9 @@ export default function DashboardPage() {
   const alerts = useMemo(() => {
     const today = todayISO();
     const expiringSoon = data.members.filter((m) => isExpiringSoon(m, today));
-    const expired = data.members.filter((m) => m.status === "expired");
+    const expired = data.members.filter(
+      (m) => effectiveMemberStatus(m, today) === "expired"
+    );
     const todayBookings = data.bookings.filter(
       (b) => b.date === today && b.status === "confirmed"
     );
@@ -474,7 +477,8 @@ export default function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             {
-              count: data.members.filter((m) => m.status === "active").length,
+              count: data.members.filter((m) => effectiveMemberStatus(m) === "active")
+                .length,
               label: "สมาชิก Active",
               color: "text-emerald-600",
               bg: "from-emerald-50 to-white border-emerald-100",
@@ -488,7 +492,8 @@ export default function DashboardPage() {
               icon: "pending",
             },
             {
-              count: data.members.filter((m) => m.status === "expired").length,
+              count: data.members.filter((m) => effectiveMemberStatus(m) === "expired")
+                .length,
               label: "หมดอายุ",
               color: "text-red-500",
               bg: "from-red-50 to-white border-red-100",
